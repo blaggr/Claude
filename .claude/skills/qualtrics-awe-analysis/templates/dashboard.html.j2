@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #0F3D5C;
+    --secondary: #2E8B8B;
+    --accent: #E8A33D;
+    --down: #A33D3D;
+    --up: #3DA365;
+    --ink: #1a1a1a;
+    --muted: #5b6770;
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --line: #e4e7eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink); background: var(--bg); margin: 0; padding: 0;
+  }
+  header {
+    background: var(--primary); color: white; padding: 28px 40px;
+  }
+  header h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+  header .meta { font-size: 13px; opacity: 0.85; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 40px 60px; }
+  .grid { display: grid; gap: 16px; }
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 28px; }
+  .kpi {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .kpi .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .kpi .value { font-size: 28px; font-weight: 600; margin-top: 4px; color: var(--primary); }
+  .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  section.dimension {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 22px 24px; margin-bottom: 18px;
+  }
+  section.dimension h2 {
+    margin: 0 0 4px; font-size: 17px; color: var(--primary);
+  }
+  section.dimension h2 .level {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 12px;
+    background: var(--primary); color: white; vertical-align: middle; margin-left: 8px;
+    font-weight: 500;
+  }
+  section.dimension .desc { color: var(--muted); font-size: 13px; margin: 4px 0 14px; }
+  .row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .chart-box { flex: 1 1 420px; min-width: 320px; height: 280px; position: relative; }
+  .summary-box { flex: 1 1 280px; min-width: 240px; }
+  table.qtable {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  table.qtable th, table.qtable td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top;
+  }
+  table.qtable th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .delta-up { color: var(--up); font-weight: 600; }
+  .delta-down { color: var(--down); font-weight: 600; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #eef2f5; color: var(--ink); }
+  .placeholder {
+    border: 1px dashed var(--line); border-radius: 8px; padding: 24px; color: var(--muted);
+    font-size: 13px; text-align: center;
+  }
+  details summary {
+    cursor: pointer; color: var(--secondary); font-size: 13px; margin: 8px 0;
+  }
+  .quote {
+    background: #f1f4f7; border-left: 3px solid var(--secondary);
+    padding: 8px 12px; margin: 6px 0; font-size: 13px; color: var(--ink);
+    border-radius: 0 6px 6px 0;
+  }
+  footer {
+    text-align: center; color: var(--muted); font-size: 12px; padding: 20px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>{{ title }}</h1>
+  <div class="meta">Generated {{ generated_at }} &middot; {{ survey_summary }}</div>
+</header>
+<main>
+  <div class="grid kpis">
+    {% for kpi in kpis %}
+    <div class="kpi">
+      <div class="label">{{ kpi.label }}</div>
+      <div class="value">{{ kpi.value }}</div>
+      <div class="sub">{{ kpi.sub }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if pre_post_pairs %}
+  <section class="dimension">
+    <h2>Pre → Post Movement <span class="level">paired</span></h2>
+    <div class="desc">Items with matching question stems in the pre and post surveys, ordered by gain.</div>
+    <div class="row">
+      <div class="chart-box"><canvas id="prepostChart"></canvas></div>
+      <div class="summary-box">
+        <table class="qtable">
+          <thead><tr><th>Item</th><th>Pre</th><th>Post</th><th>Δ</th></tr></thead>
+          <tbody>
+            {% for p in pre_post_pairs[:10] %}
+            <tr>
+              <td>{{ p.text|truncate(70) }}</td>
+              <td>{{ p.pre_mean }}</td>
+              <td>{{ p.post_mean }}</td>
+              <td class="{% if p.delta > 0 %}delta-up{% elif p.delta < 0 %}delta-down{% endif %}">
+                {{ '%+.2f' % p.delta }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% for dim in dimensions %}
+  <section class="dimension">
+    <h2>{{ dim.label }} <span class="level">L{{ dim.level }}</span></h2>
+    <div class="desc">{{ dim.description }}</div>
+
+    {% if dim.question_count == 0 %}
+      <div class="placeholder">
+        {% if dim.level == 4 %}
+          No follow-up survey provided or no questions matched long-term outcome heuristics. Provide a follow-up survey to populate this section.
+        {% else %}
+          No questions matched the {{ dim.label }} heuristics. Tune <code>reference/kirkpatrick_keywords.json</code> if expected items were missed.
+        {% endif %}
+      </div>
+    {% else %}
+    <div class="row">
+      {% if dim.chart_data %}
+      <div class="chart-box"><canvas id="dim_{{ dim.key }}"></canvas></div>
+      {% endif %}
+      <div class="summary-box">
+        <table class="qtable">
+          <thead><tr><th>Question</th><th>n</th><th>Mean</th></tr></thead>
+          <tbody>
+            {% for q in dim.questions_top %}
+            <tr>
+              <td>{{ q.text|truncate(80) }}{% if q.role %} <span class="pill">{{ q.role }}</span>{% endif %}</td>
+              <td>{{ q.n }}</td>
+              <td>{% if q.mean is not none %}{{ q.mean }}{% if q.scale_max %} / {{ q.scale_max }}{% endif %}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if dim.text_themes %}
+        <details>
+          <summary>Open-ended themes ({{ dim.text_themes|length }} questions)</summary>
+          {% for t in dim.text_themes %}
+            <div style="margin-top:10px;">
+              <strong style="font-size:12px;">{{ t.text|truncate(90) }}</strong>
+              <div style="font-size:12px; color:var(--muted); margin: 4px 0;">
+                Top words: {% for kw, cnt in t.top_keywords[:8] %}<span class="pill">{{ kw }} ({{ cnt }})</span> {% endfor %}
+              </div>
+              {% for s in t.sample_responses[:2] %}
+                <div class="quote">{{ s|truncate(180) }}</div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </details>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  <footer>Kirkpatrick mapping is heuristic — review questions flagged in <code>summary.json</code> and tune <code>reference/kirkpatrick_keywords.json</code> as needed.</footer>
+</main>
+<script>
+const CHART_DATA = {{ chart_data_json|safe }};
+
+function makeBar(canvasId, labels, data, max, color) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: color,
+        borderRadius: 4,
+        maxBarThickness: 36,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, max: max, ticks: { font: { size: 11 } } },
+        y: { ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function makeGroupedBar(canvasId, labels, preData, postData, max) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Pre',  data: preData,  backgroundColor: '#2E8B8B' },
+        { label: 'Post', data: postData, backgroundColor: '#0F3D5C' },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      scales: {
+        x: { beginAtZero: true, max: max, ticks: { font: { size: 11 } } },
+        y: { ticks: { font: { size: 11 } } }
+      },
+      plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } }
+    }
+  });
+}
+
+if (CHART_DATA.pre_post) {
+  makeGroupedBar('prepostChart',
+    CHART_DATA.pre_post.labels,
+    CHART_DATA.pre_post.pre,
+    CHART_DATA.pre_post.post,
+    CHART_DATA.pre_post.max);
+}
+for (const [key, cfg] of Object.entries(CHART_DATA.dimensions || {})) {
+  makeBar('dim_' + key, cfg.labels, cfg.data, cfg.max, cfg.color);
+}
+</script>
+</body>
+</html>

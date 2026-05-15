@@ -1,0 +1,107 @@
+{
+  "L1_quality_process": {
+    "label": "Quality Process",
+    "kirkpatrick_level": 1,
+    "description": "Reaction — learner satisfaction with the training experience, materials, facilitation, and logistics.",
+    "keywords": [
+      "satisfied", "satisfaction", "satisfying",
+      "rate", "rating", "overall experience",
+      "quality", "useful", "usefulness", "helpful", "helpfulness",
+      "engaging", "engagement", "interesting",
+      "instructor", "facilitator", "trainer", "presenter",
+      "content was", "materials", "course materials", "course content",
+      "pace", "length", "duration", "format",
+      "would recommend", "recommend this", "recommend the",
+      "easy to follow", "easy to navigate", "user-friendly",
+      "well organized", "well-organized", "well structured",
+      "relevant to my", "relevance",
+      "examples were", "exercises were", "activities were"
+    ],
+    "regex": [
+      "how (would|do) you rate",
+      "rate (the|your|this)",
+      "overall.*(experience|quality|satisfaction)",
+      "how satisfied"
+    ]
+  },
+  "L2_immediate_outcomes": {
+    "label": "Immediate Outcomes",
+    "kirkpatrick_level": 2,
+    "description": "Learning — knowledge, skill, and confidence gains measured at the close of training.",
+    "keywords": [
+      "knowledge", "knowledgeable",
+      "understand", "understanding",
+      "learned", "learning",
+      "skill", "skills",
+      "confident", "confidence",
+      "able to", "ability to",
+      "competent", "competence", "competency",
+      "know how to", "familiar with",
+      "i can identify", "i can describe", "i can explain", "i can define",
+      "i can list", "i can recognize",
+      "improved my understanding", "improved my knowledge",
+      "clear understanding"
+    ],
+    "regex": [
+      "(after|by the end of) (this|the) (training|course|module).*(i can|i am able|i understand|i know)",
+      "(rate|rating) (my|your) (knowledge|understanding|confidence|skill)",
+      "i (am|feel) (now )?(confident|able|comfortable)"
+    ]
+  },
+  "L3_transfer_of_learning": {
+    "label": "Transfer of Learning",
+    "kirkpatrick_level": 3,
+    "description": "Behavior — application of new skills and behaviors on the job after training.",
+    "keywords": [
+      "apply", "applied", "applying", "application of",
+      "on the job", "in my role", "in your role", "at work",
+      "in my work", "in your work", "in your day-to-day",
+      "since the training", "since completing", "since you completed",
+      "implement", "implemented", "implementing", "implementation",
+      "practice", "put into practice",
+      "behavior change", "change in behavior", "changed how",
+      "frequency", "how often",
+      "transfer", "back on the job",
+      "barriers to applying", "barriers to using",
+      "supported by my manager", "manager support",
+      "had an opportunity to use"
+    ],
+    "regex": [
+      "(have you|did you) (used|applied|implemented)",
+      "how (often|frequently) (do|have) you",
+      "(since|after) (the training|completing).*(use|apply|practice)",
+      "what (barriers|challenges|obstacles).*(applying|using|implementing)"
+    ]
+  },
+  "L4_long_term_outcomes": {
+    "label": "Long-term Outcomes",
+    "kirkpatrick_level": 4,
+    "description": "Results — sustained business and team-level outcomes attributable to the training.",
+    "keywords": [
+      "impact", "impacted",
+      "results", "outcomes",
+      "performance", "productivity",
+      "team performance", "team outcomes",
+      "business outcome", "business impact",
+      "roi", "return on investment",
+      "metrics", "kpi", "key performance",
+      "long-term", "long term", "sustained",
+      "retention", "turnover", "engagement scores",
+      "customer", "stakeholder",
+      "organization", "organizational",
+      "contributed to", "led to"
+    ],
+    "regex": [
+      "(what|describe).*(impact|results|outcomes).*(team|organization|business)",
+      "(measurable|tangible) (impact|results|outcomes)",
+      "long[- ]term (impact|results|outcomes|change)"
+    ]
+  },
+  "_priority_order": [
+    "L4_long_term_outcomes",
+    "L3_transfer_of_learning",
+    "L2_immediate_outcomes",
+    "L1_quality_process"
+  ],
+  "_notes": "When a question matches multiple dimensions, the priority order (L4 > L3 > L2 > L1) is used because higher-level signals are rarer and more specific. Edit this file rather than the analysis script when tuning."
+}
