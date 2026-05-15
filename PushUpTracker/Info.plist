@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSMotionUsageDescription</key>
+	<string>Push-Up Tracker reads wrist motion so it can count your reps automatically.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>A workout session is used to keep the motion sensors active while you do push-ups.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>A workout session is used to keep the motion sensors active while you do push-ups.</string>
+	<key>WKWatchOnly</key>
+	<true/>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
+</dict>
+</plist>
