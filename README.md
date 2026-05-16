@@ -4,7 +4,8 @@ A standalone Apple Watch app that:
 
 - Nudges you with a notification every waking hour to do push-ups.
 - When you tap "Start", uses the wrist motion sensors to count your reps automatically.
-- Tap "Done" and the session is logged to local history.
+- When you hit 20 reps, the session auto-logs and gives you a success haptic — the count turns green and any extra reps you do update the same entry, so going to 25 still gets full credit.
+- Tap ✓ to confirm and exit, or ✗ to discard. If you exit before 20, your partial count is still saved when you tap ✓.
 
 ## What's in this repo
 
@@ -45,9 +46,9 @@ Wearing the watch on either wrist, in a normal push-up position, the watch moves
    `a_vert = -(a·g) / |g|`
 4. Smooths with a single-pole IIR filter (α = 0.3).
 5. Runs a small state machine: a rep is counted when a downward acceleration peak (≤ −0.25 g — the top of the rep, decelerating into the descent) is followed by an upward acceleration peak (≥ +0.25 g — the bottom, arms driving the body back up) within 0.3–2.0 s. A 0.6 s refractory period prevents double-counts.
-6. Triggers a light haptic per rep.
+6. Triggers a light haptic per rep, a success haptic at the 20-rep goal.
 
-Thresholds live at the top of `PushUpDetector.swift` if your reps are slower/lighter than the defaults.
+Thresholds live at the top of `PushUpDetector.swift` if your reps are slower/lighter than the defaults. The 20-rep auto-log threshold is `SessionView.goal` at the top of `SessionView.swift`.
 
 ## Reminders
 

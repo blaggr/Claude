@@ -31,8 +31,23 @@ final class PushUpLog: ObservableObject {
             .reduce(0) { $0 + $1.count }
     }
 
-    func record(count: Int) {
-        entries.insert(PushUpEntry(count: count), at: 0)
+    @discardableResult
+    func record(count: Int) -> PushUpEntry {
+        let entry = PushUpEntry(count: count)
+        entries.insert(entry, at: 0)
+        save()
+        return entry
+    }
+
+    func update(id: UUID, count: Int) {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        let existing = entries[index]
+        entries[index] = PushUpEntry(id: existing.id, date: existing.date, count: count)
+        save()
+    }
+
+    func delete(id: UUID) {
+        entries.removeAll { $0.id == id }
         save()
     }
 

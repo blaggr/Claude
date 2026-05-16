@@ -2,6 +2,8 @@ import SwiftUI
 import WatchKit
 
 struct SessionView: View {
+    static let goal: Int = 20
+
     @EnvironmentObject private var log: PushUpLog
     @Environment(\.dismiss) private var dismiss
 
@@ -9,6 +11,9 @@ struct SessionView: View {
     @StateObject private var workout = WorkoutManager()
 
     @State private var startError: String?
+    @State private var loggedEntryID: UUID?
+
+    private var goalReached: Bool { detector.count >= Self.goal }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -16,11 +21,12 @@ struct SessionView: View {
                 .font(.system(size: 80, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .contentTransition(.numericText())
+                .foregroundStyle(goalReached ? .green : .primary)
                 .animation(.snappy, value: detector.count)
 
-            Text(detector.isRunning ? "Counting…" : "Get into position")
+            Text(subtitle)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(goalReached ? .green : .secondary)
 
             if let startError {
                 Text(startError)
@@ -49,7 +55,32 @@ struct SessionView: View {
         }
         .padding(.horizontal, 8)
         .onAppear { Task { await start() } }
-        .onChange(of: detector.count) { _, _ in
+        .onChange(of: detector.count) { _, newValue in
+            guard newValue > 0 else { return }
+            handleRep(count: newValue)
+        }
+    }
+
+    private var subtitle: String {
+        if !detector.isRunning && startError == nil {
+            return "Get into position"
+        } else if goalReached {
+            return "Goal reached — logged"
+        } else {
+            return "\(detector.count) / \(Self.goal)"
+        }
+    }
+
+    private func handleRep(count: Int) {
+        if count >= Self.goal {
+            if let id = loggedEntryID {
+                WKInterfaceDevice.current().play(.click)
+                log.update(id: id, count: count)
+            } else {
+                WKInterfaceDevice.current().play(.success)
+                loggedEntryID = log.record(count: count).id
+            }
+        } else {
             WKInterfaceDevice.current().play(.click)
         }
     }
@@ -67,9 +98,16 @@ struct SessionView: View {
         let count = detector.count
         detector.stop()
         await workout.stop()
-        if save && count > 0 {
-            log.record(count: count)
+
+        if save {
+            if loggedEntryID == nil && count > 0 {
+                log.record(count: count)
+            }
+        } else if let id = loggedEntryID {
+            log.delete(id: id)
+            loggedEntryID = nil
         }
+
         dismiss()
     }
 }
