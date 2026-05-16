@@ -7,6 +7,9 @@ Reads QUALTRICS_API_TOKEN and QUALTRICS_DATACENTER from the environment
 (or accepts them as session-only overrides via the sidebar). Triggers
 the three-stage skill pipeline (pull → analyze → render) via subprocess
 and surfaces each step's progress and log output.
+
+Also hosts the "Build helper file" tab — the codebook generator UI that wraps
+codebook_builder + the FastAPI service.
 """
 from __future__ import annotations
 
@@ -25,6 +28,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL_DIR = REPO_ROOT / ".claude" / "skills" / "qualtrics-awe-analysis"
 SCRIPTS_DIR = SKILL_DIR / "scripts"
 REPORTS_ROOT = REPO_ROOT / "awe-reports"
+
+# Make the codebook_builder package importable when running streamlit from repo root
+sys.path.insert(0, str(REPO_ROOT))
 
 ROLES = ["post", "pre", "followup"]
 
@@ -196,6 +202,199 @@ selected_run = next((r for r in list_past_runs() if r["name"] == view_run_name),
 
 st.title("AWE Survey Analyzer")
 st.caption("Pull Qualtrics surveys, classify questions against the Kirkpatrick framework, and generate an AWE training evaluation dashboard.")
+
+
+def render_helper_tab() -> None:
+    """Codebook generator tab — wraps codebook_builder + FastAPI."""
+    from codebook_builder import storage as cb_storage, normalize as cb_normalize
+    from codebook_builder.normalize import PARSER_VERSION
+
+    conn = cb_storage.connect()
+    cb_storage.run_migrations(conn)
+
+    st.markdown("### Generate a helper file (codebook)")
+    st.caption(
+        "Paste a Qualtrics survey ID or title, OR upload a PDF / DOCX. "
+        "We pull, normalize, and write to the codebook DB; you can then export "
+        "the helper as CSV / XLSX or hand the survey ID to Alteryx via ODBC."
+    )
+
+    ingest_kind = st.radio(
+        "Source", ["Qualtrics", "PDF / DOCX"], horizontal=True, key="helper_ingest_kind",
+    )
+
+    if ingest_kind == "Qualtrics":
+        q_arg = st.text_input(
+            "Survey ID or title",
+            key="helper_qualtrics_arg",
+            placeholder="SV_abc123  or  'AWE Coaching e-Learning Post'",
+        )
+        role = st.selectbox("Role", ROLES, index=0, key="helper_qualtrics_role")
+        push = st.checkbox("Also push to AWE Notion DB after ingest", key="helper_push_notion_q")
+        use_llm = st.checkbox(
+            "Use Claude to normalize (recommended if ANTHROPIC_API_KEY is set)",
+            value=bool(os.environ.get("ANTHROPIC_API_KEY")),
+            key="helper_use_llm_q",
+        )
+        if st.button("Run ingest", key="helper_run_q", disabled=not q_arg.strip()):
+            _run_qualtrics_ingest(conn, q_arg.strip(), role, push, use_llm)
+    else:
+        uploaded = st.file_uploader("Survey document", type=["pdf", "docx"], key="helper_doc_file")
+        survey_id = st.text_input("Survey slug (used as the key)", key="helper_doc_survey_id",
+                                   placeholder="e.g. eag-yearend-2026")
+        survey_title = st.text_input("Survey title", key="helper_doc_title")
+        role = st.selectbox("Role", ROLES, index=0, key="helper_doc_role")
+        push = st.checkbox("Also push to AWE Notion DB after ingest", key="helper_push_notion_d")
+        can_run = bool(uploaded and survey_id.strip())
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            st.info("Document ingestion requires ANTHROPIC_API_KEY in the environment.")
+            can_run = False
+        if st.button("Run ingest", key="helper_run_d", disabled=not can_run):
+            _run_document_ingest(conn, uploaded, survey_id.strip(), survey_title.strip() or survey_id, role, push)
+
+    st.divider()
+    _render_known_surveys(conn)
+
+
+def _run_qualtrics_ingest(conn, qualtrics_arg: str, role: str, push: bool, use_llm: bool) -> None:
+    from codebook_builder.sources import qualtrics as qsrc
+    from codebook_builder import normalize as cb_normalize, storage as cb_storage
+    from codebook_builder.normalize import PARSER_VERSION
+
+    log = st.empty()
+    with st.spinner(f"Resolving Qualtrics survey '{qualtrics_arg}'..."):
+        sid, name, definition = qsrc.resolve_and_fetch(qualtrics_arg)
+        log.info(f"Resolved: **{name}** (`{sid}`)")
+        questions = qsrc.extract_questions(definition)
+        log.info(f"Extracted {len(questions)} questions; normalizing...")
+
+    with cb_storage.transaction(conn):
+        cb_storage.upsert_survey(conn, survey_id=sid, qualtrics_id=sid, title=name)
+        iid = f"{sid}__default"
+        cb_storage.upsert_instrument(conn, instrument_id=iid, survey_id=sid, name=name, role=role)
+        run_id = cb_storage.start_run(
+            conn, survey_id=sid, source="qualtrics", source_uri=sid,
+            parser_version=PARSER_VERSION,
+            claude_model=cb_normalize.DEFAULT_MODEL if use_llm else None,
+            triggered_by="streamlit",
+        )
+
+    try:
+        vars_ = cb_normalize.normalize_qualtrics_questions(questions, use_llm=use_llm)
+        with cb_storage.transaction(conn):
+            n = cb_storage.insert_variables(
+                conn, run_id=run_id, survey_id=sid, instrument_id=iid, variables=vars_,
+            )
+            cb_storage.finish_run(conn, run_id=run_id, status="complete", n_variables=n)
+        st.success(f"Ingested {n} variables into run #{run_id}.")
+    except Exception as e:
+        with cb_storage.transaction(conn):
+            cb_storage.finish_run(conn, run_id=run_id, status="failed", n_variables=0, notes=str(e)[:500])
+        st.error(f"Ingest failed: {e}")
+        return
+
+    if push:
+        try:
+            from codebook_builder import notion_sync
+            summary = notion_sync.sync_run(run_id, conn)
+            st.success(f"Pushed to Notion: created={summary['created']}, updated={summary['updated']}")
+        except Exception as e:
+            st.warning(f"Notion sync failed: {e}")
+
+    _show_helper_preview(conn, sid)
+
+
+def _run_document_ingest(conn, uploaded, survey_id: str, survey_title: str, role: str, push: bool) -> None:
+    from codebook_builder.sources import document as docsrc
+    from codebook_builder import normalize as cb_normalize, storage as cb_storage
+    from codebook_builder.normalize import PARSER_VERSION
+    import tempfile
+
+    suffix = ".pdf" if uploaded.name.lower().endswith(".pdf") else ".docx"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as fh:
+        fh.write(uploaded.read())
+        tmp_path = Path(fh.name)
+
+    with st.spinner(f"Parsing {uploaded.name}..."):
+        text = docsrc.extract_text(tmp_path)
+
+    with cb_storage.transaction(conn):
+        cb_storage.upsert_survey(conn, survey_id=survey_id, title=survey_title)
+        iid = f"{survey_id}__default"
+        cb_storage.upsert_instrument(conn, instrument_id=iid, survey_id=survey_id, name=survey_title, role=role)
+        run_id = cb_storage.start_run(
+            conn, survey_id=survey_id,
+            source="pdf" if suffix == ".pdf" else "docx",
+            source_uri=str(tmp_path),
+            parser_version=PARSER_VERSION,
+            claude_model=cb_normalize.DEFAULT_MODEL,
+            triggered_by="streamlit",
+        )
+
+    try:
+        vars_ = cb_normalize.normalize_document_text(text)
+        with cb_storage.transaction(conn):
+            n = cb_storage.insert_variables(conn, run_id=run_id, survey_id=survey_id, instrument_id=iid, variables=vars_)
+            cb_storage.finish_run(conn, run_id=run_id, status="complete", n_variables=n)
+        st.success(f"Ingested {n} variables into run #{run_id}.")
+    except Exception as e:
+        with cb_storage.transaction(conn):
+            cb_storage.finish_run(conn, run_id=run_id, status="failed", n_variables=0, notes=str(e)[:500])
+        st.error(f"Ingest failed: {e}")
+        return
+
+    if push:
+        try:
+            from codebook_builder import notion_sync
+            summary = notion_sync.sync_run(run_id, conn)
+            st.success(f"Pushed to Notion: created={summary['created']}, updated={summary['updated']}")
+        except Exception as e:
+            st.warning(f"Notion sync failed: {e}")
+
+    _show_helper_preview(conn, survey_id)
+
+
+def _render_known_surveys(conn) -> None:
+    from codebook_builder import storage as cb_storage
+    rows = cb_storage.list_surveys(conn)
+    st.markdown("### Known surveys")
+    if not rows:
+        st.caption("Nothing ingested yet.")
+        return
+    survey_options = {f"{r['title']}  ({r['survey_id']})": r["survey_id"] for r in rows}
+    pick = st.selectbox("Pick a survey to view its helper file", options=list(survey_options.keys()))
+    if pick:
+        _show_helper_preview(conn, survey_options[pick])
+
+
+def _show_helper_preview(conn, survey_id: str) -> None:
+    from codebook_builder import storage as cb_storage
+    rows = cb_storage.latest_helper_rows(conn, survey_id, legacy=False)
+    if not rows:
+        st.warning(f"No helper rows for {survey_id} yet.")
+        return
+    st.markdown(f"#### Helper preview — `{survey_id}`")
+    st.dataframe(rows, use_container_width=True, height=420)
+
+    runs = cb_storage.runs_for_survey(conn, survey_id)
+    with st.expander(f"Ingestion history ({len(runs)} run(s))"):
+        st.dataframe(runs, use_container_width=True)
+
+    import csv, io as _io
+    buf = _io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+    w.writeheader()
+    for r in rows:
+        w.writerow(r)
+    st.download_button(
+        "Download CSV (Internal Helper Columns)", data=buf.getvalue(),
+        file_name=f"{survey_id}-helper.csv", mime="text/csv",
+    )
+
+
+with st.expander("Build helper file (codebook)", expanded=False):
+    render_helper_tab()
+
 
 if selected_run:
     st.markdown(f"### Viewing: {selected_run['title']}")
