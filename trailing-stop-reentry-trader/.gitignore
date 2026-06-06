@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+paper_state.json
+paper_trades.csv
+.streamlit/secrets.toml
+.pytest_cache/
+.DS_Store
