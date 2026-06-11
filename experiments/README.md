@@ -45,6 +45,38 @@ signal), keyword signals are crude regex, archive has a gap after Oct 2025
 (scraper shutdown), and multiple signals were tested on the same window —
 treat any marginal t-stat as exploratory.
 
+## `trump_posts_fund_comparison.py` — which FUND fits the strategy best?
+
+Follow-up to the above: SPY is so diversified it may dilute the post reaction.
+Tests 12 funds against the tariff-post signal (≥3 tariff/trade/China posts in
+a day), separating the **same-day** move (coincident, the window posts land in)
+from the **next-day** move (tradable). Prices from `fja05680/brownbear` and
+`darischen/EEWS`; window Feb 2022 → 2025-05-02, which **includes the April 2025
+"Liberation Day" tariff shock**.
+
+**The thesis is half-right (run 2026-06-11):**
+
+- **Concentration amplifies the reaction — exactly as predicted.** On tariff-post
+  days during the presidency, China and semis move far more than SPY:
+  SMH **3.15%**, KWEB 2.77%, XLK 2.71%, FXI 2.45% average absolute move, vs
+  SPY 2.05% (and ~2x their own normal daily range). Same-day *direction* is
+  cleanly negative for the trade-exposed names — FXI **−0.55%**, KWEB −0.54%
+  — i.e. China funds drop hardest when Trump posts about tariffs. SPY (−0.09%)
+  barely registers. **So yes, FXI/KWEB/SMH are "better" funds for capturing
+  the signal.**
+- **…but the edge is still same-day, not tradable next-day.** No fund has a
+  statistically significant next-day return on tariff-post days (every |t| < 1.2
+  in the presidency sample; EWZ's +1.89 over the full sample is the lone
+  outlier and is *positive*, opposite the short thesis). The "long, flip short
+  on tariff days" strategy beats buy-and-hold for almost no fund.
+
+**Conclusion:** picking a concentrated, trade-war-exposed fund (FXI, KWEB, SMH)
+makes the post reaction much larger and directionally clean — but it lands the
+*same day* the posts are made. To monetize it you'd need to trade intraday,
+within hours of the post; at daily close-to-close resolution it's already
+priced in regardless of which fund you choose. Same caveats as above, plus an
+even smaller event count per fund (13 tariff days in the presidency window).
+
 ## `gold_vs_sentiment.py` *(removed; results preserved here)*
 
 Tested trading gold inversely to the U. Michigan Consumer Sentiment index,
