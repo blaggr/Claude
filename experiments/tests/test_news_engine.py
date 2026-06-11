@@ -127,6 +127,15 @@ def test_classify_llm_falls_back_without_api_key(monkeypatch, capsys):
     assert s.topic == nte.classify(text).topic   # matches keyword fallback
     assert "falling back" in capsys.readouterr().err
 
+def test_classify_openai_falls_back_without_api_key(monkeypatch, capsys):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    text = "Major airstrikes on Iran tonight!"
+    s = nte.classify_openai(text)            # must not hit the network
+    assert isinstance(s, nte.Signal)
+    assert s.topic == nte.classify(text).topic
+    assert "falling back" in capsys.readouterr().err
+
+
 def test_plan_trade_accepts_a_custom_classifier():
     # inject a stub classifier to prove the seam works without the LLM
     stub = lambda _t: nte.Signal(topic="trade_china", valence=-1.0, intensity=2.0, matched=["stub"])

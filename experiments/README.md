@@ -127,13 +127,21 @@ Two calibrated topics:
 TRADE" (discretionary). **Small samples (6–29 events per topic) — planning
 priors, not guarantees; the engine sends no orders.**
 
-**Classifier (`--classifier keyword|llm`).** The default keyword model is
-transparent and offline. `--classifier llm` swaps in a Claude-backed classifier
-(`claude-opus-4-8`, structured JSON output) behind the same `classify() -> Signal`
-interface — it reads sarcasm, negation, and implicit valence the keyword model
-misses. Needs `pip install anthropic` and `ANTHROPIC_API_KEY`; with neither it
-falls back to the keyword classifier and warns on stderr, so the engine still
-runs. `plan_trade(..., classify_fn=...)` accepts any `str -> Signal` callable.
+**Classifier (`--classifier keyword|llm|openai`).** The default keyword model
+is transparent and offline. Two LLM options swap in behind the same
+`classify() -> Signal` interface (they read sarcasm, negation, and implicit
+valence the keyword model misses), both with structured JSON output and a
+graceful fallback to the keyword model (warning on stderr) when the SDK or key
+is missing:
+
+- `--classifier openai` — needs `pip install openai` + `OPENAI_API_KEY`;
+  model defaults to `gpt-4o-mini`, override with `OPENAI_MODEL`.
+- `--classifier llm` — Claude (`claude-opus-4-8`); needs `pip install
+  anthropic` + `ANTHROPIC_API_KEY`.
+
+The daily simulation auto-picks: `OPENAI_API_KEY` → OpenAI, else
+`ANTHROPIC_API_KEY` → Claude, else keyword. `plan_trade(..., classify_fn=...)`
+accepts any `str -> Signal` callable.
 
 Tested in `tests/test_news_engine.py` (12 cases — classification, side/quantity,
 regime flip, edge sizing, NO-TRADE, and the offline LLM fallback):

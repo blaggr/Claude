@@ -117,6 +117,9 @@ def px(prices, ticker: str, field: str, date_str: str):
 
 
 def choose_classifier():
+    """Prefer whichever LLM key is configured; offline keyword model otherwise."""
+    if os.environ.get("OPENAI_API_KEY"):
+        return nte.classify_openai, f"openai ({nte.OPENAI_MODEL})"
     if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
         return nte.classify_llm, "llm (claude)"
     return nte.classify, "keyword"

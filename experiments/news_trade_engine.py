@@ -177,6 +177,46 @@ def classify_llm(text: str, model: str = LLM_MODEL, client=None, strict: bool = 
         return classify(text)
 
 
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+
+def classify_openai(text: str, model: str = None, client=None, strict: bool = False) -> Signal:
+    """OpenAI version of classify(). Same Signal interface; same graceful
+    fallback to the keyword classifier when the openai SDK or OPENAI_API_KEY
+    is unavailable (unless ``strict``). Uses structured JSON output so the
+    response is guaranteed to match the schema."""
+    try:
+        from openai import OpenAI  # lazy: only needed for this path
+        if client is None:
+            if not os.environ.get("OPENAI_API_KEY"):
+                raise RuntimeError("no OPENAI_API_KEY in environment")
+            client = OpenAI()
+        resp = client.chat.completions.create(
+            model=model or OPENAI_MODEL,
+            max_tokens=512,
+            messages=[{"role": "system", "content": _LLM_SYSTEM},
+                      {"role": "user", "content": text}],
+            response_format={"type": "json_schema",
+                             "json_schema": {"name": "news_signal", "strict": True,
+                                             "schema": _LLM_SCHEMA}},
+        )
+        msg = resp.choices[0].message
+        if getattr(msg, "refusal", None):
+            raise RuntimeError(f"model refused to classify: {msg.refusal}")
+        data = json.loads(msg.content)
+        topic = data["topic"] if data.get("topic") in _LLM_TOPICS else "none"
+        valence = max(-1.0, min(1.0, float(data["valence"])))
+        intensity = max(0.0, float(data.get("intensity", 0)))
+        matched = [str(m) for m in data.get("matched", [])]
+        return Signal(topic, round(valence, 3), round(intensity, 2), matched)
+    except Exception as exc:  # any failure -> deterministic keyword fallback
+        if strict:
+            raise
+        print(f"[classify_openai] falling back to keyword classifier: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return classify(text)
+
+
 # ---------------------------------------------------------------- calibration
 
 # response to NEGATIVE/escalation news: sign of expected return (+1 up / -1 down),
@@ -332,14 +372,15 @@ def main(argv=None):
     ap.add_argument("--out-office", action="store_true", help="Use the out-of-office regime (default: in office)")
     ap.add_argument("--instrument", action="append", help="Force instrument(s); repeatable. Default: calibrated basket")
     ap.add_argument("--scale", action="store_true", help="Scale quantity by edge ((2p-1)*qty) instead of using it as-is")
-    ap.add_argument("--classifier", choices=["keyword", "llm"], default="keyword",
-                    help="Valence classifier: 'keyword' (offline, default) or 'llm' (Claude; needs ANTHROPIC_API_KEY)")
+    ap.add_argument("--classifier", choices=["keyword", "llm", "openai"], default="keyword",
+                    help="Valence classifier: 'keyword' (offline, default), 'llm' (Claude; needs "
+                         "ANTHROPIC_API_KEY), or 'openai' (needs OPENAI_API_KEY; model via OPENAI_MODEL)")
     ap.add_argument("--json", action="store_true", help="Emit JSON")
     ap.add_argument("--demo", action="store_true", help="Run the built-in example posts")
     args = ap.parse_args(argv)
 
     regime = "out_office" if args.out_office else "in_office"
-    classify_fn = classify_llm if args.classifier == "llm" else classify
+    classify_fn = {"llm": classify_llm, "openai": classify_openai}.get(args.classifier, classify)
     texts = EXAMPLES if args.demo else ([args.text] if args.text else None)
     if not texts:
         ap.error("provide --text \"...\" or --demo")

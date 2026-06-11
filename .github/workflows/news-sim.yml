@@ -28,11 +28,14 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install --quiet pandas yfinance anthropic
+        run: pip install --quiet pandas yfinance openai anthropic
 
       - name: Run daily simulation step
         env:
-          # optional — enables the Claude classifier; falls back to keyword without it
+          # optional — enables an LLM classifier; OPENAI_API_KEY is preferred,
+          # then ANTHROPIC_API_KEY; falls back to the keyword model without either
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python experiments/simulation/daily_sim.py
 
