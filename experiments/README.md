@@ -91,6 +91,31 @@ headline hits, exit on impulse-decay within ~the hour and by the next cash open.
 Includes the regime caveat — out of office (2022–24) the same posts had the
 *opposite*, significant sign (FXI open→close +0.44%, t=2.4).
 
+## `news_trade_engine.py` — news in → sized BUY/SELL order out
+
+Operational engine that turns the research into a trade plan. Give it a news
+item and the quantity you want to trade:
+
+```bash
+python news_trade_engine.py --qty 500 --text "ADDITIONAL 100% TARIFF on China, effective now!"
+python news_trade_engine.py --demo                 # built-in example posts
+python news_trade_engine.py --out-office --text "..."   # regime flip
+python news_trade_engine.py --qty 1000 --scale --instrument FXI --text "..."  # size by edge
+python news_trade_engine.py --json --text "..."    # machine-readable
+```
+
+It (1) classifies **topic** and **valence** (escalation ↔ de-escalation) from a
+transparent keyword model, (2) looks up the **empirically-calibrated** response
+for that topic + political **regime**, and (3) emits per-instrument legs with
+**side, your quantity, P(move), expected move %, and the entry+exit rule**.
+Trades either direction: escalation → the risk-off response; de-escalation →
+the same legs flipped. `--scale` sizes each leg by edge ((2p−1)·qty).
+
+Calibrated probabilities are baked from this repo's event studies (in office:
+SPY-down 0.77, GLD-up 0.69, FXI-down 0.62, KWEB 0.46; out of office the China
+sign flips to +0.72). **Tiny samples (13/29 events) — these are planning
+priors, not guarantees; the engine sends no orders.**
+
 ## `gold_vs_sentiment.py` *(removed; results preserved here)*
 
 Tested trading gold inversely to the U. Michigan Consumer Sentiment index,
