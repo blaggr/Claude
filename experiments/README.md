@@ -164,17 +164,31 @@ Runs the engine **forward on live news** as a paper fund: starts at **$100**,
 reinvests all P&L, no leverage. Each weekday at ~10:05–11:05 AM ET a GitHub
 Actions job (`.github/workflows/news-sim.yml`):
 
-1. **Settles** yesterday's position at entry = yesterday's close → exit =
-   today's open (the calibrated overnight window; no look-ahead).
-2. **Scans** the last 24h of Truth Social posts (CNN mirror, GitHub fallback),
-   classifies them (Claude if an `ANTHROPIC_API_KEY` secret is set, else
-   keyword), and adopts the highest-edge plan as today's position, sized
-   across legs by edge weight.
+1. **Scans** the last 24h of Truth Social posts (CNN mirror, GitHub fallback)
+   and classifies them (OpenAI if `OPENAI_API_KEY` is set, else Claude if
+   `ANTHROPIC_API_KEY`, else keyword).
+2. **Fills at event time** (`simulation/intraday.py`): entry at the first
+   1-minute bar ≥ post + 5 min (pre/post-market bars included), exit on
+   **trailing-stop decay** (the repo's original strategy as the exit
+   mechanism) or the calibrated hard boundary — next cash open for
+   out-of-hours posts, session close for intraday posts. Posts whose venue
+   was closed until the move was priced are honestly marked **MISSED**.
+   Because yfinance keeps ~7 days of minute bars, the once-daily run
+   reconstructs exact event-time fills retrospectively — no always-on
+   poller needed. One position at a time; unresolved events carry to the
+   next run; events stale after 3 days settle at the last bar.
 3. **Reports**: commits `simulation/reports/YYYY-MM-DD.md`, `ledger.csv`, and
    `state.json`, and comments the report on the rolling issue
    **“📈 News-Trade Sim — Daily Reports”** (subscribe for email delivery).
 4. **Alerts**: if the bankroll falls to ≤ $1 the sim halts and opens a
    **🚨 SIM FUND BUSTED** issue.
+
+> Why event-time fills: the original close→open model entered *after* the
+> move — our event studies show most posts land pre-open and the move
+> completes in that morning's gap (event-day open→close t≈0.2). Event-time
+> entry + decay exit is the fill model `PERFECT_TRADE.md` actually
+> prescribes. (A legacy close→open settle remains only to close out any
+> position opened under the old model.)
 
 **Activation:** GitHub only fires `schedule` workflows from the repo's
 **default branch** — merge the PR (or run it manually via the Actions tab →
@@ -184,6 +198,19 @@ delete `state.json`/`ledger.csv`/`BUSTED` and let the next run reseed $100.
 Run a step locally: `python experiments/simulation/daily_sim.py --dry-run`.
 Money math is tested in `tests/test_daily_sim.py` (settlement, compounding,
 short legs, holiday carry-over, sizing, bust floor).
+
+## `live/` — execution-grade trader (Alpaca, paper by default)
+
+The real-money-shaped version: an always-on worker (`live/live_trader.py`)
+that polls posts every 30s, classifies with an LLM, and places orders at
+Alpaca — event-time entry, trailing-decay exit, boundary flatten, mirroring
+the sim exactly. Paper trading by default; live requires `ALPACA_LIVE=1`
+**and** an acknowledgement file (double interlock), with a kill-switch file,
+a 5% daily-loss auto-kill, a 25%-of-equity per-event budget, idempotent
+orders, and restart reconciliation. Without an LLM key it runs in SHADOW
+mode (journals signals, places nothing). Full runbook incl. the paper→live
+promotion gate and why TradingView cannot be the execution hub:
+`live/README.md`. Risk interlocks tested in `tests/test_live.py`.
 
 ## `gold_vs_sentiment.py` *(removed; results preserved here)*
 

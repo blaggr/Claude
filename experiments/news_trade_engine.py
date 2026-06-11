@@ -135,10 +135,17 @@ _LLM_SCHEMA = {
 _LLM_SYSTEM = (
     "You classify a single piece of news (a Trump/White House/administration post or headline) "
     "for an automated trading engine. Judge it from a markets standpoint: does it read as risk-off "
-    "escalation (tariffs, sanctions, export bans, trade-war threats — negative valence) or risk-on "
-    "de-escalation (deals, pauses, exemptions, productive talks — positive valence)? Account for "
-    "sarcasm, negation, and conditional/hypothetical framing. If the item has no plausible market "
-    "impact, set topic 'none' and valence 0. Respond only via the structured schema."
+    "escalation (tariffs, sanctions, export bans, trade-war threats, military strikes — negative "
+    "valence) or risk-on de-escalation (deals, pauses, exemptions, ceasefires, productive talks — "
+    "positive valence)? Account for sarcasm, negation, and conditional/hypothetical framing. "
+    "STRICT topic rules: 'geopolitics_conflict' requires ACTUAL or IMMINENT military action "
+    "(strikes, attacks, ultimatums, force deployments, ceasefires ending or starting). Defense "
+    "budgets, procurement, military parades, weapons-program announcements, and patriotic rhetoric "
+    "about the military are NOT conflict events — classify those 'macro_generic' or 'none' with "
+    "valence 0 unless they explicitly threaten or de-escalate a specific confrontation. Similarly, "
+    "'trade_china' requires a concrete trade-policy signal, not generic praise or criticism of "
+    "China. If the item has no plausible near-term market impact, set topic 'none' and valence 0. "
+    "Respond only via the structured schema."
 )
 
 

@@ -3,6 +3,8 @@
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
+  "open_events": [],
+  "processed_ids": [],
   "last_run": null,
   "days": 0,
   "wins": 0,

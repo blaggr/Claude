@@ -15,20 +15,28 @@ concurrency:
   group: news-trade-sim
   cancel-in-progress: false
 
+# NOTE: this workflow deliberately uses no marketplace actions (no
+# actions/checkout, no actions/setup-python) so it runs under the strictest
+# Actions policy ("only actions owned by this account"). Checkout is plain
+# git; Python and the gh CLI are preinstalled on ubuntu-latest runners.
+
 jobs:
   simulate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
+      - name: Check out repository (action-free)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git clone --depth 1 --branch "$GITHUB_REF_NAME" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "$GITHUB_WORKSPACE"
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: pip install --quiet pandas yfinance openai anthropic
+      - name: Install dependencies (preinstalled Python)
+        run: |
+          python3 --version
+          python3 -m venv "$HOME/simenv"
+          "$HOME/simenv/bin/pip" install --quiet pandas yfinance openai anthropic
 
       - name: Run daily simulation step
         env:
@@ -37,7 +45,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python experiments/simulation/daily_sim.py
+        run: '"$HOME/simenv/bin/python" experiments/simulation/daily_sim.py'
 
       - name: Commit state, ledger and report
         run: |
@@ -45,22 +53,23 @@ jobs:
           git config user.email "actions@github.com"
           git add experiments/simulation/
           git diff --cached --quiet || git commit -m "sim: daily step $(date -u +%F)"
-          git push
+          git push origin "HEAD:$GITHUB_REF_NAME"
 
       - name: Post morning report to the rolling issue
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TITLE="📈 News-Trade Sim — Daily Reports"
-          NUM=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number' || true)
+          NUM=$(gh issue list -R "$GITHUB_REPOSITORY" --state open \
+                --search "in:title \"$TITLE\"" --json number --jq '.[0].number' || true)
           if [ -z "$NUM" ]; then
-            NUM=$(gh issue create --title "$TITLE" \
+            NUM=$(gh issue create -R "$GITHUB_REPOSITORY" --title "$TITLE" \
               --body "Rolling thread: the simulation posts each morning's report here. Subscribe to this issue for email delivery." \
               | grep -o '[0-9]*$')
           fi
           REPORT="experiments/simulation/reports/$(date -u +%F).md"
           if [ -f "$REPORT" ]; then
-            gh issue comment "$NUM" --body-file "$REPORT"
+            gh issue comment "$NUM" -R "$GITHUB_REPOSITORY" --body-file "$REPORT"
           fi
 
       - name: Alert if the fund busted
@@ -68,9 +77,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ -f experiments/simulation/BUSTED ]; then
-            EXISTING=$(gh issue list --state open --search "in:title \"SIM FUND BUSTED\"" --json number --jq '.[0].number' || true)
+            EXISTING=$(gh issue list -R "$GITHUB_REPOSITORY" --state open \
+                       --search "in:title \"SIM FUND BUSTED\"" --json number --jq '.[0].number' || true)
             if [ -z "$EXISTING" ]; then
-              gh issue create --title "🚨 SIM FUND BUSTED — simulation halted" \
+              gh issue create -R "$GITHUB_REPOSITORY" \
+                --title "🚨 SIM FUND BUSTED — simulation halted" \
                 --body "$(cat experiments/simulation/BUSTED)
 
           The simulated bankroll fell to or below the \$1 floor. The sim has stopped taking positions. To restart with a fresh \$100, delete \`experiments/simulation/state.json\`, \`ledger.csv\` and the \`BUSTED\` marker, then re-run the workflow."
