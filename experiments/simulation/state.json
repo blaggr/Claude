@@ -1,0 +1,10 @@
+{
+  "bankroll": 100.0,
+  "start_bankroll": 100.0,
+  "busted": false,
+  "pending_plan": null,
+  "last_run": null,
+  "days": 0,
+  "wins": 0,
+  "trades": 0
+}

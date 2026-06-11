@@ -1,0 +1,78 @@
+name: news-trade-sim
+
+on:
+  schedule:
+    # 15:05 UTC Mon-Fri = 10:05 EST / 11:05 EDT — after the US cash open,
+    # so today's open price exists to settle the overnight position.
+    - cron: "5 15 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: news-trade-sim
+  cancel-in-progress: false
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --quiet pandas yfinance openai anthropic
+
+      - name: Run daily simulation step
+        env:
+          # optional — enables an LLM classifier; OPENAI_API_KEY is preferred,
+          # then ANTHROPIC_API_KEY; falls back to the keyword model without either
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python experiments/simulation/daily_sim.py
+
+      - name: Commit state, ledger and report
+        run: |
+          git config user.name "news-sim-bot"
+          git config user.email "actions@github.com"
+          git add experiments/simulation/
+          git diff --cached --quiet || git commit -m "sim: daily step $(date -u +%F)"
+          git push
+
+      - name: Post morning report to the rolling issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="📈 News-Trade Sim — Daily Reports"
+          NUM=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number' || true)
+          if [ -z "$NUM" ]; then
+            NUM=$(gh issue create --title "$TITLE" \
+              --body "Rolling thread: the simulation posts each morning's report here. Subscribe to this issue for email delivery." \
+              | grep -o '[0-9]*$')
+          fi
+          REPORT="experiments/simulation/reports/$(date -u +%F).md"
+          if [ -f "$REPORT" ]; then
+            gh issue comment "$NUM" --body-file "$REPORT"
+          fi
+
+      - name: Alert if the fund busted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f experiments/simulation/BUSTED ]; then
+            EXISTING=$(gh issue list --state open --search "in:title \"SIM FUND BUSTED\"" --json number --jq '.[0].number' || true)
+            if [ -z "$EXISTING" ]; then
+              gh issue create --title "🚨 SIM FUND BUSTED — simulation halted" \
+                --body "$(cat experiments/simulation/BUSTED)
+
+          The simulated bankroll fell to or below the \$1 floor. The sim has stopped taking positions. To restart with a fresh \$100, delete \`experiments/simulation/state.json\`, \`ledger.csv\` and the \`BUSTED\` marker, then re-run the workflow."
+            fi
+          fi
