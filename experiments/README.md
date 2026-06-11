@@ -116,6 +116,18 @@ SPY-down 0.77, GLD-up 0.69, FXI-down 0.62, KWEB 0.46; out of office the China
 sign flips to +0.72). **Tiny samples (13/29 events) — these are planning
 priors, not guarantees; the engine sends no orders.**
 
+**Classifier (`--classifier keyword|llm`).** The default keyword model is
+transparent and offline. `--classifier llm` swaps in a Claude-backed classifier
+(`claude-opus-4-8`, structured JSON output) behind the same `classify() -> Signal`
+interface — it reads sarcasm, negation, and implicit valence the keyword model
+misses. Needs `pip install anthropic` and `ANTHROPIC_API_KEY`; with neither it
+falls back to the keyword classifier and warns on stderr, so the engine still
+runs. `plan_trade(..., classify_fn=...)` accepts any `str -> Signal` callable.
+
+Tested in `tests/test_news_engine.py` (12 cases — classification, side/quantity,
+regime flip, edge sizing, NO-TRADE, and the offline LLM fallback):
+`python -m pytest experiments/tests/test_news_engine.py -q`.
+
 ## `gold_vs_sentiment.py` *(removed; results preserved here)*
 
 Tested trading gold inversely to the U. Michigan Consumer Sentiment index,

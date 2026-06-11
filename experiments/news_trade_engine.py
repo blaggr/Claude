@@ -30,9 +30,11 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
+from typing import Callable
 
 # ---------------------------------------------------------------- classifier
 
@@ -87,6 +89,76 @@ def classify(text: str) -> Signal:
     caps = sum(1 for w in text.split() if len(w) >= 4 and w.isupper())
     intensity = (nneg + npos) + 0.5 * min(caps, 6) + 0.3 * text.count("!")
     return Signal(topic, round(valence, 3), round(float(intensity), 2), neg + pos)
+
+
+# ---- LLM-backed classifier (same Signal interface, optional) --------------
+# Drop-in replacement for classify() that uses Claude to read nuance, sarcasm,
+# and implicit valence the keyword model misses. Falls back to classify() when
+# the anthropic SDK or an API key is unavailable, so the engine still runs
+# offline. Requires: pip install anthropic  (+ ANTHROPIC_API_KEY in the env).
+
+LLM_MODEL = "claude-opus-4-8"
+_LLM_TOPICS = ["trade_china", "fed", "macro_generic", "none"]
+_LLM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "topic": {"type": "string", "enum": _LLM_TOPICS,
+                  "description": "trade_china for US-China trade/tariffs; fed for monetary policy; "
+                                 "macro_generic for other market-moving econ news; none if not market-relevant"},
+        "valence": {"type": "number",
+                    "description": "-1 = strong risk-off / escalation (e.g. new tariffs, sanctions), "
+                                   "+1 = strong risk-on / de-escalation (e.g. trade deal, tariff pause), "
+                                   "0 = neutral or not market-relevant"},
+        "intensity": {"type": "number", "description": "0-3 forcefulness/specificity of the headline"},
+        "matched": {"type": "array", "items": {"type": "string"},
+                    "description": "key phrases that drove the classification"},
+    },
+    "required": ["topic", "valence", "intensity", "matched"],
+    "additionalProperties": False,
+}
+_LLM_SYSTEM = (
+    "You classify a single piece of news (a Trump/White House/administration post or headline) "
+    "for an automated trading engine. Judge it from a markets standpoint: does it read as risk-off "
+    "escalation (tariffs, sanctions, export bans, trade-war threats — negative valence) or risk-on "
+    "de-escalation (deals, pauses, exemptions, productive talks — positive valence)? Account for "
+    "sarcasm, negation, and conditional/hypothetical framing. If the item has no plausible market "
+    "impact, set topic 'none' and valence 0. Respond only via the structured schema."
+)
+
+
+def classify_llm(text: str, model: str = LLM_MODEL, client=None, strict: bool = False) -> Signal:
+    """LLM version of classify(). Returns the same Signal. Falls back to the
+    keyword classifier (and warns on stderr) if the API is unavailable, unless
+    ``strict`` is set."""
+    try:
+        import anthropic  # lazy: only needed for the LLM path
+        if client is None:
+            if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+                raise RuntimeError("no ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN in environment")
+            client = anthropic.Anthropic()
+        resp = client.messages.create(
+            model=model,
+            max_tokens=512,
+            system=_LLM_SYSTEM,
+            output_config={"effort": "low",
+                           "format": {"type": "json_schema", "schema": _LLM_SCHEMA}},
+            messages=[{"role": "user", "content": text}],
+        )
+        if resp.stop_reason == "refusal":
+            raise RuntimeError("model refused to classify")
+        payload = next(b.text for b in resp.content if b.type == "text")
+        data = json.loads(payload)
+        topic = data["topic"] if data.get("topic") in _LLM_TOPICS else "none"
+        valence = max(-1.0, min(1.0, float(data["valence"])))
+        intensity = max(0.0, float(data.get("intensity", 0)))
+        matched = [str(m) for m in data.get("matched", [])]
+        return Signal(topic, round(valence, 3), round(intensity, 2), matched)
+    except Exception as exc:  # any failure -> deterministic keyword fallback
+        if strict:
+            raise
+        print(f"[classify_llm] falling back to keyword classifier: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return classify(text)
 
 
 # ---------------------------------------------------------------- calibration
@@ -147,8 +219,9 @@ def _confidence(p: float, intensity: float, valence: float) -> str:
 
 
 def plan_trade(text: str, base_qty: int, regime: str = "in_office",
-               instruments: list[str] | None = None, scale_by_prob: bool = False) -> dict:
-    sig = classify(text)
+               instruments: list[str] | None = None, scale_by_prob: bool = False,
+               classify_fn: Callable[[str], Signal] = classify) -> dict:
+    sig = classify_fn(text)
     out = {"signal": dataclasses.asdict(sig), "regime": regime, "plans": []}
 
     if sig.topic == "none" or abs(sig.valence) < 1e-6:
@@ -220,17 +293,20 @@ def main(argv=None):
     ap.add_argument("--out-office", action="store_true", help="Use the out-of-office regime (default: in office)")
     ap.add_argument("--instrument", action="append", help="Force instrument(s); repeatable. Default: calibrated basket")
     ap.add_argument("--scale", action="store_true", help="Scale quantity by edge ((2p-1)*qty) instead of using it as-is")
+    ap.add_argument("--classifier", choices=["keyword", "llm"], default="keyword",
+                    help="Valence classifier: 'keyword' (offline, default) or 'llm' (Claude; needs ANTHROPIC_API_KEY)")
     ap.add_argument("--json", action="store_true", help="Emit JSON")
     ap.add_argument("--demo", action="store_true", help="Run the built-in example posts")
     args = ap.parse_args(argv)
 
     regime = "out_office" if args.out_office else "in_office"
+    classify_fn = classify_llm if args.classifier == "llm" else classify
     texts = EXAMPLES if args.demo else ([args.text] if args.text else None)
     if not texts:
         ap.error("provide --text \"...\" or --demo")
 
     for t in texts:
-        res = plan_trade(t, args.qty, regime, args.instrument, args.scale)
+        res = plan_trade(t, args.qty, regime, args.instrument, args.scale, classify_fn)
         if args.json:
             print(json.dumps(res, indent=2))
             continue
