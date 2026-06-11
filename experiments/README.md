@@ -77,6 +77,20 @@ within hours of the post; at daily close-to-close resolution it's already
 priced in regardless of which fund you choose. Same caveats as above, plus an
 even smaller event count per fund (13 tariff days in the presidency window).
 
+## `trump_news_perfect_trade.py` + `PERFECT_TRADE.md` — the designed trade
+
+Splits each tariff-post event-day move into **overnight** (prior close → open,
+un-capturable) vs **open→close** (capturable at the open). Decisive finding
+(presidency window): the directional China move is **entirely in the overnight
+gap** — FXI −0.66% overnight, +0.09% (t=0.2) open→close, and T+1 flat. The edge
+is priced **before the US cash open**, so it's zero at daily/ETF-open resolution.
+
+`PERFECT_TRADE.md` is the full strategy write-up built on this: short China beta
+(FXI/KWEB) and/or long gold via **futures/FX** the instant an escalation
+headline hits, exit on impulse-decay within ~the hour and by the next cash open.
+Includes the regime caveat — out of office (2022–24) the same posts had the
+*opposite*, significant sign (FXI open→close +0.44%, t=2.4).
+
 ## `gold_vs_sentiment.py` *(removed; results preserved here)*
 
 Tested trading gold inversely to the U. Michigan Consumer Sentiment index,
