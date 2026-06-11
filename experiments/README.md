@@ -199,6 +199,19 @@ Run a step locally: `python experiments/simulation/daily_sim.py --dry-run`.
 Money math is tested in `tests/test_daily_sim.py` (settlement, compounding,
 short legs, holiday carry-over, sizing, bust floor).
 
+## `live/` — execution-grade trader (Alpaca, paper by default)
+
+The real-money-shaped version: an always-on worker (`live/live_trader.py`)
+that polls posts every 30s, classifies with an LLM, and places orders at
+Alpaca — event-time entry, trailing-decay exit, boundary flatten, mirroring
+the sim exactly. Paper trading by default; live requires `ALPACA_LIVE=1`
+**and** an acknowledgement file (double interlock), with a kill-switch file,
+a 5% daily-loss auto-kill, a 25%-of-equity per-event budget, idempotent
+orders, and restart reconciliation. Without an LLM key it runs in SHADOW
+mode (journals signals, places nothing). Full runbook incl. the paper→live
+promotion gate and why TradingView cannot be the execution hub:
+`live/README.md`. Risk interlocks tested in `tests/test_live.py`.
+
 ## `gold_vs_sentiment.py` *(removed; results preserved here)*
 
 Tested trading gold inversely to the U. Michigan Consumer Sentiment index,
