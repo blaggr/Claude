@@ -2,9 +2,62 @@
   "bankroll": 100.0,
   "start_bankroll": 100.0,
   "busted": false,
-  "pending_plan": null,
-  "last_run": null,
-  "days": 0,
+  "pending_plan": {
+    "decided_on": "2026-06-11",
+    "signal": {
+      "topic": "geopolitics_conflict",
+      "valence": -1.0,
+      "intensity": 3.0,
+      "matched": [
+        "great military",
+        "$350 Billion Reconciliation Bill",
+        "THE SAVE AMERICA ACT",
+        "$1.5 TRILLION DOLLAR Military Budget",
+        "defend the Homeland",
+        "Global Dominance",
+        "American Jobs",
+        "ironclad Military Budget",
+        "total Space Force and Drone Dominance"
+      ]
+    },
+    "legs": [
+      {
+        "instrument": "USO",
+        "side": "BUY",
+        "weight": 0.5468,
+        "notional": 54.68,
+        "probability": 0.83,
+        "expected_move_pct": 3.0
+      },
+      {
+        "instrument": "GLD",
+        "side": "BUY",
+        "weight": 0.2187,
+        "notional": 21.87,
+        "probability": 0.83,
+        "expected_move_pct": 1.2
+      },
+      {
+        "instrument": "SPY",
+        "side": "SELL",
+        "weight": 0.164,
+        "notional": 16.4,
+        "probability": 0.83,
+        "expected_move_pct": -0.9
+      },
+      {
+        "instrument": "ITA",
+        "side": "BUY",
+        "weight": 0.0704,
+        "notional": 7.04,
+        "probability": 0.67,
+        "expected_move_pct": 0.75
+      }
+    ],
+    "headline": "No other President has ever been more committed to both REBUILDING our Great Military and SAVING our Great Country \u2014 And NOW is the time to make it happen, for Generations to come. I am hereby calling"
+  },
+  "last_run": "2026-06-11T19:48:07+00:00",
+  "days": 1,
   "wins": 0,
   "trades": 0
 }
