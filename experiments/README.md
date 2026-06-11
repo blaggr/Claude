@@ -150,6 +150,33 @@ data at runtime). Headline: oil is the strongest, most reliable leg; SPY sells
 off but shallowly and tends to recover the next session — so this is a
 same-day/overnight trade (crude & gold futures), not a multi-day hold.
 
+## `simulation/` — daily forward sim ($100, compounding, morning reports)
+
+Runs the engine **forward on live news** as a paper fund: starts at **$100**,
+reinvests all P&L, no leverage. Each weekday at ~10:05–11:05 AM ET a GitHub
+Actions job (`.github/workflows/news-sim.yml`):
+
+1. **Settles** yesterday's position at entry = yesterday's close → exit =
+   today's open (the calibrated overnight window; no look-ahead).
+2. **Scans** the last 24h of Truth Social posts (CNN mirror, GitHub fallback),
+   classifies them (Claude if an `ANTHROPIC_API_KEY` secret is set, else
+   keyword), and adopts the highest-edge plan as today's position, sized
+   across legs by edge weight.
+3. **Reports**: commits `simulation/reports/YYYY-MM-DD.md`, `ledger.csv`, and
+   `state.json`, and comments the report on the rolling issue
+   **“📈 News-Trade Sim — Daily Reports”** (subscribe for email delivery).
+4. **Alerts**: if the bankroll falls to ≤ $1 the sim halts and opens a
+   **🚨 SIM FUND BUSTED** issue.
+
+**Activation:** GitHub only fires `schedule` workflows from the repo's
+**default branch** — merge the PR (or run it manually via the Actions tab →
+`news-trade-sim` → *Run workflow*) to start the clock. To reset the fund,
+delete `state.json`/`ledger.csv`/`BUSTED` and let the next run reseed $100.
+
+Run a step locally: `python experiments/simulation/daily_sim.py --dry-run`.
+Money math is tested in `tests/test_daily_sim.py` (settlement, compounding,
+short legs, holiday carry-over, sizing, bust floor).
+
 ## `gold_vs_sentiment.py` *(removed; results preserved here)*
 
 Tested trading gold inversely to the U. Michigan Consumer Sentiment index,
