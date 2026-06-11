@@ -35,6 +35,21 @@ def test_classify_offtopic_is_none():
     assert s.topic == "none"
     assert s.valence == 0
 
+def test_classify_war_escalation_is_conflict_negative():
+    s = nte.classify("U.S. military carried out major AIRSTRIKES on Iran's nuclear facilities.")
+    assert s.topic == "geopolitics_conflict"
+    assert s.valence < 0
+
+def test_classify_ceasefire_is_conflict_positive():
+    s = nte.classify("Ceasefire between Israel and Iran; both sides agreed to stand down.")
+    assert s.topic == "geopolitics_conflict"
+    assert s.valence > 0
+
+def test_trade_war_stays_china_not_conflict():
+    # "trade war" mentions war but is a tariff story — must not become conflict
+    s = nte.classify("The trade war with China escalates: new tariffs coming.")
+    assert s.topic == "trade_china"
+
 
 # ---- trade planning -------------------------------------------------------
 
@@ -69,6 +84,26 @@ def test_scale_by_prob_sizes_to_edge():
     legs = {p["instrument"]: p for p in res["plans"]}
     assert legs["SPY"]["quantity"] == round(1000 * (2 * 0.77 - 1))   # 540
     assert legs["FXI"]["quantity"] == round(1000 * (2 * 0.62 - 1))   # 240
+
+def test_war_escalation_buys_oil_gold_defense_sells_spy():
+    res = nte.plan_trade("Major AIRSTRIKES on Iran tonight; missiles incoming.", base_qty=200)
+    legs = {p["instrument"]: p for p in res["plans"]}
+    assert res["plans"][0]["instrument"] == "USO"   # oil leads (highest edge)
+    assert legs["USO"]["side"] == "BUY"
+    assert legs["GLD"]["side"] == "BUY"
+    assert legs["ITA"]["side"] == "BUY"
+    assert legs["SPY"]["side"] == "SELL"
+
+def test_ceasefire_flips_conflict_legs():
+    res = nte.plan_trade("Ceasefire reached between Israel and Iran; forces stand down.", base_qty=100)
+    legs = {p["instrument"]: p for p in res["plans"]}
+    assert legs["USO"]["side"] == "SELL"
+    assert legs["SPY"]["side"] == "BUY"
+
+def test_conflict_is_regime_independent():
+    a = nte.plan_trade("Airstrikes on Iran!", base_qty=100, regime="in_office")
+    b = nte.plan_trade("Airstrikes on Iran!", base_qty=100, regime="out_office")
+    assert [p["side"] for p in a["plans"]] == [p["side"] for p in b["plans"]]
 
 def test_offtopic_returns_no_trade():
     res = nte.plan_trade("Beautiful weather in Florida today!", base_qty=100)

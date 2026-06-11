@@ -43,14 +43,27 @@ NEG_TERMS = [  # escalation / risk-off
     "ban", "retaliat", "penalt", "no deal", "crack down", "crackdown",
     "100%", "200%", "additional tariff", "reciprocal tariff", "decoupl",
     "punish", "blacklist", "restrict", "levy", "duties",
+    # conflict / war escalation
+    "airstrike", "air strike", "missile strike", "missile", "drone strike",
+    "military strike", "strike on", "attack", "invasion", "invade", "at war",
+    "bomb", "bombard", "killed", "escalat", "ground offensive", "open fire",
 ]
 POS_TERMS = [  # de-escalation / risk-on
     "deal", "agreement", "great call", "productive", "pause", "paused",
     "exempt", "exemption", "rolling back", "roll back", "truce", "breakthrough",
     "lower tariff", "cut tariff", "reduce tariff", "framework", "phase one",
     "constructive", "progress", "agreed",
+    # conflict de-escalation
+    "ceasefire", "cease-fire", "de-escalate", "deescalate", "stand down",
+    "withdrawal", "withdraw", "no casualties", "peace", "restraint", "diplomacy",
 ]
 TOPIC_TRADE = ["china", "tariff", "trade", "xi", "beijing", "import", "export", "duties"]
+TOPIC_CONFLICT = [
+    "iran", "israel", "tehran", "idf", "irgc", "hezbollah", "hamas", "gaza",
+    "houthi", "hormuz", "strait of hormuz", "middle east", "nuclear",
+    "airstrike", "air strike", "missile", "war", "invasion", "military",
+    "oil facility", "retaliatory strike",
+]
 TOPIC_FED = ["fed", "powell", "interest rate", "rate cut", "federal reserve"]
 MARKET_WORDS = TOPIC_TRADE + TOPIC_FED + ["market", "stock", "economy", "inflation", "deal"]
 
@@ -67,9 +80,11 @@ def classify(text: str) -> Signal:
     low = text.lower()
     neg = [t for t in NEG_TERMS if t in low]
     pos = [t for t in POS_TERMS if t in low]
-    # topic
+    # topic (trade checked first so "trade war" stays trade_china, not conflict)
     if any(t in low for t in TOPIC_TRADE):
         topic = "trade_china"
+    elif any(t in low for t in TOPIC_CONFLICT):
+        topic = "geopolitics_conflict"
     elif any(t in low for t in TOPIC_FED):
         topic = "fed"
     elif any(t in low for t in MARKET_WORDS):
@@ -82,8 +97,8 @@ def classify(text: str) -> Signal:
         valence = 0.0
     else:
         valence = (npos - nneg) / (nneg + npos)
-    # a pure tariff/China mention with no positive cue reads as escalation
-    if topic == "trade_china" and nneg + npos == 0:
+    # a bare trade/conflict mention with no explicit cue reads as escalation
+    if topic in ("trade_china", "geopolitics_conflict") and nneg + npos == 0:
         valence = -0.4
     # intensity: term hits + ALL-CAPS shouting + exclamation
     caps = sum(1 for w in text.split() if len(w) >= 4 and w.isupper())
@@ -98,12 +113,13 @@ def classify(text: str) -> Signal:
 # offline. Requires: pip install anthropic  (+ ANTHROPIC_API_KEY in the env).
 
 LLM_MODEL = "claude-opus-4-8"
-_LLM_TOPICS = ["trade_china", "fed", "macro_generic", "none"]
+_LLM_TOPICS = ["trade_china", "geopolitics_conflict", "fed", "macro_generic", "none"]
 _LLM_SCHEMA = {
     "type": "object",
     "properties": {
         "topic": {"type": "string", "enum": _LLM_TOPICS,
-                  "description": "trade_china for US-China trade/tariffs; fed for monetary policy; "
+                  "description": "trade_china for US-China trade/tariffs; geopolitics_conflict for "
+                                 "Iran/Middle-East/war/military news; fed for monetary policy; "
                                  "macro_generic for other market-moving econ news; none if not market-relevant"},
         "valence": {"type": "number",
                     "description": "-1 = strong risk-off / escalation (e.g. new tariffs, sanctions), "
@@ -165,23 +181,44 @@ def classify_llm(text: str, model: str = LLM_MODEL, client=None, strict: bool = 
 
 # response to NEGATIVE/escalation news: sign of expected return (+1 up / -1 down),
 # probability that sign is realized, mean move %, and the capture window/exit.
+# Keyed by TOPIC, then regime. (Regime matters for trade_china — the sign flips
+# in vs out of office; geopolitics_conflict uses the same table for both.)
+
+# Iran / Middle-East war escalation — calibrated from iran_conflict_event_study.py
+# (6 events, same-day reaction). Direction is robust; magnitudes are indicative.
+_GEO = {
+    "USO": dict(sign=+1, p=0.83, move=2.00, window="overnight", note="oil supply risk — strongest, most reliable"),
+    "GLD": dict(sign=+1, p=0.83, move=0.80, window="overnight", note="safe-haven bid"),
+    "ITA": dict(sign=+1, p=0.67, move=0.50, window="overnight", note="defense; also drifts up next session"),
+    "SPY": dict(sign=-1, p=0.83, move=0.60, window="overnight", note="risk-off, but shallow — often recovers next session"),
+    "TLT": dict(sign=+1, p=0.67, move=0.30, window="overnight", note="flight to safety"),
+}
 CALIB = {
-    "in_office": {
-        "SPY":  dict(sign=-1, p=0.77, move=0.88, window="overnight", note="most reliable"),
-        "GLD":  dict(sign=+1, p=0.69, move=0.58, window="overnight", note="safe-haven gap"),
-        "FXI":  dict(sign=-1, p=0.62, move=0.66, window="overnight", note=""),
-        "KWEB": dict(sign=-1, p=0.46, move=0.84, window="overnight", note="~coin flip, low conf"),
+    "trade_china": {
+        "in_office": {
+            "SPY":  dict(sign=-1, p=0.77, move=0.88, window="overnight", note="most reliable"),
+            "GLD":  dict(sign=+1, p=0.69, move=0.58, window="overnight", note="safe-haven gap"),
+            "FXI":  dict(sign=-1, p=0.62, move=0.66, window="overnight", note=""),
+            "KWEB": dict(sign=-1, p=0.46, move=0.84, window="overnight", note="~coin flip, low conf"),
+        },
+        "out_office": {
+            "FXI":  dict(sign=+1, p=0.72, move=0.59, window="intraday", note="rhetoric fade"),
+            "KWEB": dict(sign=+1, p=0.72, move=0.75, window="intraday", note="rhetoric fade"),
+            "GLD":  dict(sign=+1, p=0.66, move=0.23, window="intraday", note=""),
+            "SPY":  dict(sign=+1, p=0.59, move=0.14, window="intraday", note="weak"),
+        },
     },
-    "out_office": {
-        "FXI":  dict(sign=+1, p=0.72, move=0.59, window="intraday", note="rhetoric fade"),
-        "KWEB": dict(sign=+1, p=0.72, move=0.75, window="intraday", note="rhetoric fade"),
-        "GLD":  dict(sign=+1, p=0.66, move=0.23, window="intraday", note=""),
-        "SPY":  dict(sign=+1, p=0.59, move=0.14, window="intraday", note="weak"),
-    },
+    "geopolitics_conflict": {"in_office": _GEO, "out_office": _GEO},  # regime-independent
 }
 DEFAULT_BASKET = {
-    "in_office": ["SPY", "GLD", "FXI"],   # sell broad + buy gold hedge + sell China
-    "out_office": ["FXI", "KWEB"],
+    "trade_china": {
+        "in_office": ["SPY", "GLD", "FXI"],   # sell broad + buy gold hedge + sell China
+        "out_office": ["FXI", "KWEB"],
+    },
+    "geopolitics_conflict": {
+        "in_office": ["USO", "GLD", "ITA", "SPY"],   # buy oil + gold + defense, sell broad
+        "out_office": ["USO", "GLD", "ITA", "SPY"],
+    },
 }
 EXIT = {
     "overnight": ("Enter immediately in a venue open NOW (index/FX futures or "
@@ -227,13 +264,13 @@ def plan_trade(text: str, base_qty: int, regime: str = "in_office",
     if sig.topic == "none" or abs(sig.valence) < 1e-6:
         out["decision"] = "NO TRADE — no market-relevant valence detected."
         return out
-    if sig.topic != "trade_china":
+    if sig.topic not in CALIB:
         out["decision"] = (f"NO CALIBRATED TRADE — topic '{sig.topic}' is not "
                            "empirically calibrated here; treat as discretionary.")
         return out
 
-    table = CALIB[regime]
-    picks = instruments or DEFAULT_BASKET[regime]
+    table = CALIB[sig.topic][regime]
+    picks = instruments or DEFAULT_BASKET[sig.topic][regime]
     # valence direction multiplier: escalation(-) uses calibrated sign as-is;
     # de-escalation(+) flips it.
     flip = 1 if sig.valence < 0 else -1
@@ -281,6 +318,8 @@ def plan_trade(text: str, base_qty: int, regime: str = "in_office",
 EXAMPLES = [
     "BREAKING: I am imposing an ADDITIONAL 100% TARIFF on all Chinese imports, effective immediately!",
     "Just had a very productive call with President Xi. We have agreed to a framework deal and will pause tariffs.",
+    "The U.S. military has carried out major AIRSTRIKES on Iran's nuclear facilities tonight.",
+    "Pleased to announce a CEASEFIRE between Israel and Iran. Both sides have agreed to stand down.",
     "The Fed must CUT INTEREST RATES now. Powell is too late, as usual!",
     "Had a wonderful dinner at Mar-a-Lago last night. Thank you to everyone!",
 ]

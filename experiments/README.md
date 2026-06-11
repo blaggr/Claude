@@ -111,9 +111,20 @@ for that topic + political **regime**, and (3) emits per-instrument legs with
 Trades either direction: escalation → the risk-off response; de-escalation →
 the same legs flipped. `--scale` sizes each leg by edge ((2p−1)·qty).
 
-Calibrated probabilities are baked from this repo's event studies (in office:
-SPY-down 0.77, GLD-up 0.69, FXI-down 0.62, KWEB 0.46; out of office the China
-sign flips to +0.72). **Tiny samples (13/29 events) — these are planning
+Two calibrated topics:
+
+- **`trade_china`** (US–China tariffs). In office: SPY-down 0.77, GLD-up 0.69,
+  FXI-down 0.62, KWEB 0.46. Out of office the China sign flips to +0.72.
+- **`geopolitics_conflict`** (Iran / Middle-East / war). Escalation → **BUY oil
+  (USO), BUY gold (GLD), BUY defense (ITA), SELL SPY**; de-escalation/ceasefire
+  flips all four. Calibrated from `iran_conflict_event_study.py` (6 escalation
+  events, same-day reaction): oil +2.5% (83% up), gold +0.8% (83%), SPY −0.6%
+  (83% down), defense +0.4%, Treasuries +0.3%. Regime-independent. The engine
+  correctly flips on a *contained* strike read as de-escalation (cf. the
+  2020-01-08 no-casualty event, where oil actually fell).
+
+`fed` and `macro_generic` are recognized but **not** calibrated → "NO CALIBRATED
+TRADE" (discretionary). **Small samples (6–29 events per topic) — planning
 priors, not guarantees; the engine sends no orders.**
 
 **Classifier (`--classifier keyword|llm`).** The default keyword model is
@@ -127,6 +138,17 @@ runs. `plan_trade(..., classify_fn=...)` accepts any `str -> Signal` callable.
 Tested in `tests/test_news_engine.py` (12 cases — classification, side/quantity,
 regime flip, edge sizing, NO-TRADE, and the offline LLM fallback):
 `python -m pytest experiments/tests/test_news_engine.py -q`.
+
+## `iran_conflict_event_study.py` — calibration for the conflict topic
+
+Event study behind the `geopolitics_conflict` calibration. Measures the
+same-day and next-day reaction of oil (USO), energy (XLE), gold (GLD), defense
+(ITA), Treasuries (TLT), and SPY across six real Iran/Middle-East escalation
+dates (Abqaiq 2019, Soleimani + Iran missile strikes Jan 2020, Iran↔Israel
+Apr/Oct 2024). Reproduce: `python iran_conflict_event_study.py` (fetches public
+data at runtime). Headline: oil is the strongest, most reliable leg; SPY sells
+off but shallowly and tends to recover the next session — so this is a
+same-day/overnight trade (crude & gold futures), not a multi-day hold.
 
 ## `gold_vs_sentiment.py` *(removed; results preserved here)*
 
