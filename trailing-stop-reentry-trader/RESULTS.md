@@ -17,7 +17,7 @@ $10,000, intrabar fill model, default initial entry on the first bar.
 
 ## AAPL — 2015-02-17 → 2017-02-16 (choppy/flat market)
 
-Buy & hold: **+5.88%**, max drawdown **-32.08%**.
+Buy & hold: **+6.17%**, max drawdown **-32.08%**.
 
 | trail $ | reentry $ | return % | vs B&H | trades | win % | max DD % | time in mkt % |
 |--------:|----------:|---------:|-------:|-------:|------:|---------:|--------------:|
@@ -38,7 +38,7 @@ capital protection, not return. Wide trails ($5) just get whipsawed: 17 trades,
 
 ## TSLA — 2015-10-15 → 2018-10-15 (volatile, trending)
 
-Buy & hold: **+17.30%**, max drawdown **-40.14%**.
+Buy & hold: **+19.94%**, max drawdown **-40.14%**.
 
 | trail $ | reentry $ | return % | vs B&H | trades | win % | max DD % | time in mkt % |
 |--------:|----------:|---------:|-------:|-------:|------:|---------:|--------------:|

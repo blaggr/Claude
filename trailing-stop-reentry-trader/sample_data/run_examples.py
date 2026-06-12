@@ -24,7 +24,9 @@ def max_drawdown_pct(close):
 def sweep(name, path, trails, reentries):
     df = d.load_csv(path)
     c = df["close"]
-    bh = (c.iloc[-1] / c.iloc[0] - 1) * 100
+    # Benchmark buy-and-hold from the first OPEN (the price the strategy itself
+    # first fills at), so this header matches the vs-B&H column.
+    bh = (c.iloc[-1] / df["open"].iloc[0] - 1) * 100
     print()
     print(f"{name} | {len(df)} bars | {df.index[0].date()} -> {df.index[-1].date()} "
           f"| price ${c.iloc[0]:.0f} -> ${c.iloc[-1]:.0f}")
