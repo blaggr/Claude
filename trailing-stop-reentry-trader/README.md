@@ -62,6 +62,19 @@ tick. Simulated BUY/SELL fills are appended to `paper_trades.csv`; engine state
 is saved to `paper_state.json`, so you can stop (Ctrl-C) and resume without
 losing the position. Live prices only move while the market is open.
 
+## 4. Paper trading on Alpaca (real paper orders)
+
+```bash
+export ALPACA_KEY_ID=PK... ALPACA_SECRET_KEY=...
+python alpaca_trader.py --symbol SPY --check                       # preflight
+python alpaca_trader.py --symbol SPY --trail 1.5 --reentry 1 --poll 60
+```
+
+Same engine, but it places **real orders on an Alpaca paper account** and
+reconciles fills/positions against the broker — the genuine "test via Alpaca"
+path. Paper by default; live is locked behind explicit interlocks (kill switch,
+daily loss limit, ack file). Full runbook: [`ALPACA.md`](ALPACA.md).
+
 ## How it works
 
 | File | Role |
@@ -69,7 +82,9 @@ losing the position. Live prices only move while the market is open.
 | `strategy.py` | The rule. `run_backtest` walks OHLC bars; `StreamingStrategy` processes live ticks. Shared, dollar-denominated parameters. |
 | `data.py` | Data loaders: Yahoo Finance, local CSV, and an offline synthetic generator. |
 | `backtest.py` | Command-line backtester. |
-| `paper.py` | Live paper-trading loop (simulated fills only). |
+| `paper.py` | Live paper-trading loop off yfinance (simulated fills only). |
+| `alpaca_trader.py` | Paper-trade the rule on Alpaca — real paper orders, fills reconciled, full interlocks. See [`ALPACA.md`](ALPACA.md). |
+| `broker.py` / `risk.py` | Stdlib Alpaca REST adapter and the paper/live + kill-switch + daily-loss interlocks. |
 | `app.py` | Streamlit dashboard. |
 | `tests/test_strategy.py` | Hand-built price paths that pin down the exact fills, plus an offline run. |
 

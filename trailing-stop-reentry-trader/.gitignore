@@ -5,6 +5,11 @@ venv/
 .env
 paper_state.json
 paper_trades.csv
+alpaca_state.json
+alpaca_state.json.tmp
+alpaca_journal.jsonl
+KILL
+LIVE_TRADING_ENABLED
 .streamlit/secrets.toml
 .pytest_cache/
 .DS_Store
