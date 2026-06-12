@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.dirname(HERE))  # experiments/ -> import the engine
 sys.path.insert(0, HERE)
 import news_trade_engine as nte  # noqa: E402
 import intraday  # noqa: E402
+import macro_events  # noqa: E402
 
 STATE_PATH = os.path.join(HERE, "state.json")
 LEDGER_PATH = os.path.join(HERE, "ledger.csv")
@@ -300,7 +301,7 @@ def scan_and_trade(state: dict, posts: list[dict], bars: dict, classify_fn,
 # ------------------------------------------------------------------ report
 
 def write_report(today: str, state: dict, legacy: dict | None, activity: dict,
-                 n_posts: int, clf_name: str) -> str:
+                 n_posts: int, clf_name: str, macro: dict | None = None) -> str:
     ret_total = (state["bankroll"] / state["start_bankroll"] - 1) * 100
     lines = [f"# News-Trade Sim — {today}", ""]
     if state["busted"]:
@@ -350,6 +351,14 @@ def write_report(today: str, state: dict, legacy: dict | None, activity: dict,
         lines += [f"_Skipped {activity['skipped']} signal post(s) while a position was open._", ""]
     if not (activity["settled"] or activity["missed"] or activity["still_open"]):
         lines += ["_No market-relevant news in the last 24h — staying in cash._", ""]
+
+    if macro:
+        lines += [f"## Scheduled macro event: {macro['kind']}"]
+        if macro["status"] == "shadow":
+            lines += [f"_{macro['note']}_", ""]
+        else:
+            lines += [f"Surprise: **{macro['label']}** → "
+                      + ", ".join(f"{l['side']} {l['instrument']}" for l in macro["legs"]), ""]
 
     lines += ["---", "_Simulation only; no real orders. Calibration & caveats: experiments/README.md_"]
     return "\n".join(lines)
@@ -401,9 +410,13 @@ def main(argv=None) -> int:
     if state["bankroll"] <= BUST_FLOOR:
         state["busted"] = True
 
+    macro = macro_events.check_today(today)   # FOMC / CPI awareness (shadow w/o feed)
+    if macro:
+        print(f"[macro] {macro['kind']} today — {macro['status']}")
+
     state["last_run"] = now_utc().isoformat(timespec="seconds")
     state["days"] += 1
-    report = write_report(today, state, legacy, activity, len(posts), clf_name)
+    report = write_report(today, state, legacy, activity, len(posts), clf_name, macro)
 
     if args.dry_run:
         print(report)
