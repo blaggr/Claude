@@ -123,7 +123,15 @@ Two calibrated topics:
   correctly flips on a *contained* strike read as de-escalation (cf. the
   2020-01-08 no-casualty event, where oil actually fell).
 
-`fed` and `macro_generic` are recognized but **not** calibrated → "NO CALIBRATED
+- **`fed`** (administration interest-rate / Fed posts). Calibrated from
+  `fed_event_study.py` (6 events). The market read is genuinely mixed — dovish
+  rate-cut demands (risk-on) vs. Fed-independence attacks like April 2025
+  (risk-off) cancel out on equities/bonds/dollar (~50%). **Only gold shows a
+  reliable response (+1.0% same-day, 83%)**, so a Fed-pressure post trades
+  **BUY gold only** (de-escalation/Fed-supportive flips it). This honesty —
+  trading one leg instead of inventing an equity direction — is the point.
+
+`macro_generic` is recognized but **not** calibrated → "NO CALIBRATED
 TRADE" (discretionary). **Small samples (6–29 events per topic) — planning
 priors, not guarantees; the engine sends no orders.**
 
@@ -211,6 +219,20 @@ orders, and restart reconciliation. Without an LLM key it runs in SHADOW
 mode (journals signals, places nothing). Full runbook incl. the paper→live
 promotion gate and why TradingView cannot be the execution hub:
 `live/README.md`. Risk interlocks tested in `tests/test_live.py`.
+
+## `simulation/macro_events.py` — scheduled FOMC / CPI events
+
+Adds awareness of scheduled releases (FOMC decisions 14:00 ET, CPI 08:30 ET)
+to the sim. Unlike a post, a release only has a tradable direction relative to
+**consensus** — a fully-priced hold does nothing; a hot CPI sells off. The
+calendar and the surprise→direction logic are complete and tested (hawkish/hot
+→ SELL SPY/TLT, BUY USD, SELL gold; dovish/cool flips), but **execution is
+gated on a `SurpriseSource`**. The default returns nothing, so on an FOMC/CPI
+day with no feed the sim *announces* the event and trades nothing (shadow).
+Drop in a consensus+actual feed (`FileSurpriseSource`, env `MACRO_SURPRISE_FILE`,
+or your own `get_surprise`) and it trades. Robust forward consensus data isn't
+freely available — that feed is the one remaining piece, and it's a (likely
+paid) data-source decision. `fed_event_study.py` backs the `fed` post topic.
 
 ## `gold_vs_sentiment.py` *(removed; results preserved here)*
 

@@ -47,6 +47,10 @@ NEG_TERMS = [  # escalation / risk-off
     "airstrike", "air strike", "missile strike", "missile", "drone strike",
     "military strike", "strike on", "attack", "invasion", "invade", "at war",
     "bomb", "bombard", "killed", "escalat", "ground offensive", "open fire",
+    # Fed pressure / attacks on Fed (the destabilizing case) — see fed_event_study
+    "cut rates", "cut interest rates", "lower interest rate", "lower the rate",
+    "rates too high", "too late", "fire powell", "powell must", "terminate powell",
+    "powell's termination", "zero rates", "rate cut", "must cut", "too tight",
 ]
 POS_TERMS = [  # de-escalation / risk-on
     "deal", "agreement", "great call", "productive", "pause", "paused",
@@ -56,6 +60,8 @@ POS_TERMS = [  # de-escalation / risk-on
     # conflict de-escalation
     "ceasefire", "cease-fire", "de-escalate", "deescalate", "stand down",
     "withdrawal", "withdraw", "no casualties", "peace", "restraint", "diplomacy",
+    # Fed-supportive / hands-off (rare)
+    "fed independence", "respect the fed", "rates are fine",
 ]
 TOPIC_TRADE = ["china", "tariff", "trade", "xi", "beijing", "import", "export", "duties"]
 TOPIC_CONFLICT = [
@@ -64,7 +70,8 @@ TOPIC_CONFLICT = [
     "airstrike", "air strike", "missile", "war", "invasion", "military",
     "oil facility", "retaliatory strike",
 ]
-TOPIC_FED = ["fed", "powell", "interest rate", "rate cut", "federal reserve"]
+TOPIC_FED = ["fed", "powell", "interest rate", "interest rates", "rate cut",
+             "rate hike", "federal reserve", "monetary policy", "rates"]
 MARKET_WORDS = TOPIC_TRADE + TOPIC_FED + ["market", "stock", "economy", "inflation", "deal"]
 
 
@@ -97,8 +104,9 @@ def classify(text: str) -> Signal:
         valence = 0.0
     else:
         valence = (npos - nneg) / (nneg + npos)
-    # a bare trade/conflict mention with no explicit cue reads as escalation
-    if topic in ("trade_china", "geopolitics_conflict") and nneg + npos == 0:
+    # a bare trade/conflict/fed mention with no explicit cue reads as the
+    # common case: trade escalation, conflict, or pressure on the Fed
+    if topic in ("trade_china", "geopolitics_conflict", "fed") and nneg + npos == 0:
         valence = -0.4
     # intensity: term hits + ALL-CAPS shouting + exclamation
     caps = sum(1 for w in text.split() if len(w) >= 4 and w.isupper())
@@ -144,8 +152,11 @@ _LLM_SYSTEM = (
     "about the military are NOT conflict events — classify those 'macro_generic' or 'none' with "
     "valence 0 unless they explicitly threaten or de-escalate a specific confrontation. Similarly, "
     "'trade_china' requires a concrete trade-policy signal, not generic praise or criticism of "
-    "China. If the item has no plausible near-term market impact, set topic 'none' and valence 0. "
-    "Respond only via the structured schema."
+    "China. For 'fed': any administration pressure on or attack against the Federal Reserve, "
+    "Powell, or interest-rate policy (demands to cut, 'too late', threats to fire/replace Powell) "
+    "is NEGATIVE valence (it destabilizes — gold rises); explicit support for Fed independence or "
+    "leaving policy alone is positive. If the item has no plausible near-term market impact, set "
+    "topic 'none' and valence 0. Respond only via the structured schema."
 )
 
 
@@ -233,6 +244,16 @@ def classify_openai(text: str, model: str = None, client=None, strict: bool = Fa
 
 # Iran / Middle-East war escalation — calibrated from iran_conflict_event_study.py
 # (6 events, same-day reaction). Direction is robust; magnitudes are indicative.
+# Administration Fed / interest-rate posts — calibrated from fed_event_study.py
+# (6 events). Only gold shows a reliable directional response (+1.0% same-day,
+# 83%); equities/bonds/dollar are ~coin-flips because the sample mixes dovish
+# rate-cut demands (risk-on) with Fed-independence attacks (risk-off), so we
+# trade ONLY the gold leg. "Escalation" here = pressure on / attacks against
+# the Fed (the usual case); de-escalation (Fed-supportive) flips it.
+_FED = {
+    "GLD": dict(sign=+1, p=0.83, move=1.00, window="overnight",
+                note="only reliable Fed-post leg; equities/bonds too mixed to trade"),
+}
 _GEO = {
     "USO": dict(sign=+1, p=0.83, move=2.00, window="overnight", note="oil supply risk — strongest, most reliable"),
     "GLD": dict(sign=+1, p=0.83, move=0.80, window="overnight", note="safe-haven bid"),
@@ -256,6 +277,7 @@ CALIB = {
         },
     },
     "geopolitics_conflict": {"in_office": _GEO, "out_office": _GEO},  # regime-independent
+    "fed": {"in_office": _FED, "out_office": _FED},                   # only matters in office
 }
 DEFAULT_BASKET = {
     "trade_china": {
@@ -266,6 +288,7 @@ DEFAULT_BASKET = {
         "in_office": ["USO", "GLD", "ITA", "SPY"],   # buy oil + gold + defense, sell broad
         "out_office": ["USO", "GLD", "ITA", "SPY"],
     },
+    "fed": {"in_office": ["GLD"], "out_office": ["GLD"]},   # gold only — see _FED
 }
 EXIT = {
     "overnight": ("Enter immediately in a venue open NOW (index/FX futures or "
