@@ -29,10 +29,18 @@ def _flatten_yf(df: pd.DataFrame) -> pd.DataFrame:
         df.columns = [str(c[0]).lower() for c in df.columns]
     else:
         df.columns = [str(c).lower() for c in df.columns]
-    if "adj close" in df.columns and "close" not in df.columns:
-        df = df.rename(columns={"adj close": "close"})
+    # Prefer the split/dividend-adjusted close whenever it is present, even if a
+    # raw "close" is also present — otherwise a split shows up as a fake crash
+    # that whipsaws the trailing stop.
+    if "adj close" in df.columns:
+        df = df.drop(columns=["close"], errors="ignore").rename(
+            columns={"adj close": "close"})
     keep = [c for c in _COLS if c in df.columns]
-    df = df[keep].dropna()
+    df = df[keep]
+    # Only drop a bar if a PRICE field is missing; a NaN volume (common on index
+    # / half-day bars) must not delete an otherwise-valid price observation.
+    price_cols = [c for c in ("open", "high", "low", "close") if c in df.columns]
+    df = df.dropna(subset=price_cols) if price_cols else df
     df.index.name = "time"
     return df
 
@@ -74,9 +82,23 @@ def fetch_ohlcv(
 
 def load_csv(path: str, time_col: Optional[str] = None) -> pd.DataFrame:
     """Load OHLC(V) bars from a CSV. The time column is auto-detected from a
-    column named time/date/datetime/timestamp (or pass ``time_col``)."""
+    column named time/date/datetime/timestamp (or pass ``time_col``).
+
+    The required OHLC columns are validated up front, and if no time column can
+    be found the integer row index is left as-is rather than being relabelled
+    ``time`` to masquerade as timestamps.
+    """
     df = pd.read_csv(path)
     df.columns = [str(c).lower() for c in df.columns]
+
+    required = {"open", "high", "low", "close"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"CSV is missing required OHLC columns: {sorted(missing)} "
+            f"(found {sorted(df.columns)})"
+        )
+
     if time_col is None:
         for cand in ("time", "date", "datetime", "timestamp"):
             if cand in df.columns:
@@ -85,8 +107,9 @@ def load_csv(path: str, time_col: Optional[str] = None) -> pd.DataFrame:
     if time_col and time_col in df.columns:
         df[time_col] = pd.to_datetime(df[time_col])
         df = df.set_index(time_col)
-    df.index.name = "time"
-    return df.dropna(subset=[c for c in ("close",) if c in df.columns])
+        df.index.name = "time"
+    # else: leave the default RangeIndex untouched — do not pretend it is time.
+    return df.dropna(subset=["close"])
 
 
 def synthetic_ohlcv(
@@ -109,8 +132,10 @@ def synthetic_ohlcv(
     open_ = np.empty(n)
     open_[0] = start_price
     open_[1:] = close[:-1]
-    # build plausible intrabar highs/lows around open/close
-    span = np.abs(rng.normal(0, sigma * np.sqrt(dt) * start_price, size=n)) + 1e-6
+    # build plausible intrabar highs/lows around open/close. Scale the wick by
+    # the CURRENT price level (not the constant start_price) so the relative
+    # daily range stays realistic as the series drifts.
+    span = np.abs(rng.normal(0, sigma * np.sqrt(dt), size=n)) * close + 1e-6
     high = np.maximum(open_, close) + span
     low = np.minimum(open_, close) - span
     volume = rng.integers(1_000_000, 5_000_000, size=n).astype(float)

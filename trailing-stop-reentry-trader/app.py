@@ -10,7 +10,6 @@ explains how to leave the rule running live in paper-sim mode.
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -41,9 +40,8 @@ def price_chart(result, df: pd.DataFrame):
     fig.add_trace(go.Scatter(x=result.trigger_line.index, y=result.trigger_line.values,
                              name="Re-entry trigger", line=dict(color="#2a9d8f", width=1, dash="dot")))
 
-    buys = [t for t in result.trades]
     fig.add_trace(go.Scatter(
-        x=[t.entry_time for t in buys], y=[t.entry_price for t in buys],
+        x=[t.entry_time for t in result.trades], y=[t.entry_price for t in result.trades],
         mode="markers", name="Buy", marker=dict(symbol="triangle-up", size=11, color="#2a9d8f"),
     ))
     sells = [t for t in result.trades if t.exit_time is not None]

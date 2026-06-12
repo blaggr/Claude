@@ -88,6 +88,9 @@ class BacktestResult:
     trigger_line: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
     position: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
     price: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
+    bh_entry: Optional[float] = None
+    """First tradeable price (bar-0 open). Buy-and-hold is benchmarked from
+    here so it is comparable to the strategy, which also first fills at the open."""
 
     # -- summary metrics -------------------------------------------------
     @property
@@ -96,13 +99,18 @@ class BacktestResult:
 
     @property
     def total_return(self) -> float:
+        if not self.initial_capital:
+            return 0.0
         return self.final_equity / self.initial_capital - 1.0
 
     @property
     def buy_hold_return(self) -> float:
-        if len(self.price) < 2:
+        if len(self.price) < 1:
             return 0.0
-        return float(self.price.iloc[-1] / self.price.iloc[0] - 1.0)
+        base = self.bh_entry if self.bh_entry else float(self.price.iloc[0])
+        if not base:
+            return 0.0
+        return float(self.price.iloc[-1] / base - 1.0)
 
     @property
     def num_trades(self) -> int:
@@ -128,7 +136,8 @@ class BacktestResult:
             return 0.0
         running_max = self.equity.cummax()
         drawdown = self.equity / running_max - 1.0
-        return float(drawdown.min())
+        dd = drawdown.min()
+        return float(dd) if pd.notna(dd) else 0.0
 
     @property
     def exposure(self) -> float:
@@ -161,6 +170,28 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# ---------------------------------------------------------------------------
+# Shared rule primitives. These define the trailing-stop / re-entry rule on a
+# SINGLE price (a bar close, or a live tick). Both the close-only backtest path
+# and the StreamingStrategy call these, so the two engines cannot drift apart.
+# The intrabar backtest path is a bar-aware *refinement* layered on top (it can
+# see a bar's high/low); it deliberately differs and is documented as such.
+# ---------------------------------------------------------------------------
+def _should_enter(price: float, last_exit_price: Optional[float],
+                  reentry: float, enter_at_start: bool) -> bool:
+    """Flat-state entry decision for a single price (close/tick semantics)."""
+    if last_exit_price is None:
+        return enter_at_start
+    return price >= last_exit_price + reentry
+
+
+def _should_exit(price: float, peak: float, trail: float) -> bool:
+    """Long-state exit decision. The stop is tested against the *prior* peak
+    before the peak is allowed to extend — identical ordering to the close-only
+    backtest, which is what guarantees the two engines agree on close data."""
+    return price <= peak - trail
+
+
 def run_backtest(
     df: pd.DataFrame,
     params: StrategyParams,
@@ -173,6 +204,15 @@ def run_backtest(
     **before** the high is allowed to extend the peak. A gap below the stop
     fills at the open. This avoids flattering results by assuming the peak
     extends before the stop can trigger.
+
+    The entry bar is managed on the same iteration it is opened: its own
+    high/close extends the peak and its low/close can trip the stop, so a bar
+    that opens a position and then reverses inside the same bar is handled
+    rather than ignored until the next bar.
+
+    When ``enter_at_start`` is False the re-entry trigger is armed at the first
+    bar's open, so the strategy buys on the first move ``reentry`` dollars above
+    that price instead of deadlocking with nothing to trigger against.
     """
     params.validate()
     df = _normalize(df)
@@ -200,6 +240,11 @@ def run_backtest(
     low = df["low"].to_numpy(dtype=float)
     c = df["close"].to_numpy(dtype=float)
 
+    # Arm the re-entry trigger at the first price when we are not entering at
+    # the start, so the "wait for the first trigger" mode can ever fire.
+    if not params.enter_at_start:
+        last_exit_price = float(o[0])
+
     for i in range(len(df)):
         t = index[i]
 
@@ -216,7 +261,8 @@ def run_backtest(
                         do_enter = True
                         fill = o[i] if o[i] >= trigger else trigger
                 else:
-                    if c[i] >= trigger:
+                    if _should_enter(c[i], last_exit_price, params.reentry,
+                                     params.enter_at_start):
                         do_enter, fill = True, c[i]
 
             if do_enter and fill > 0:
@@ -228,20 +274,25 @@ def run_backtest(
                 entry_idx = i
                 peak = fill
 
-        elif state == "long":
+        # Manage the long on the SAME bar it was opened (not elif): the entry
+        # bar's own range extends the peak and can trip the stop.
+        if state == "long":
             assert peak is not None and entry_price is not None
             stop_level = peak - params.trail
             exited = False
             fill = math.nan
             if params.use_intrabar:
-                if o[i] <= stop_level:          # gapped through the stop
+                # On the entry bar we filled at `entry_price` (the open or the
+                # trigger), so an open below the stop is not a gap we could have
+                # been caught by — only an intrabar low can stop us that bar.
+                if i != entry_idx and o[i] <= stop_level:   # gapped through stop
                     exited, fill = True, o[i]
-                elif low[i] <= stop_level:       # stop touched intrabar
+                elif low[i] <= stop_level:                  # stop touched intrabar
                     exited, fill = True, stop_level
                 else:
-                    peak = max(peak, h[i])       # only now extend the peak
+                    peak = max(peak, h[i])                  # only now extend peak
             else:
-                if c[i] <= stop_level:
+                if _should_exit(c[i], peak, params.trail):
                     exited, fill = True, c[i]
                 else:
                     peak = max(peak, c[i])   # ratchet the peak on the close
@@ -308,6 +359,7 @@ def run_backtest(
         trigger_line=pd.Series(trigger_vals, index=index, name="reentry_trigger"),
         position=pd.Series(pos_vals, index=index, name="shares"),
         price=df["close"].copy(),
+        bh_entry=float(o[0]),
     )
 
 
@@ -359,24 +411,36 @@ class StreamingStrategy:
         return None
 
     def update(self, price: float) -> Optional[dict]:
-        """Process one price tick. Returns a fill event dict or ``None``."""
+        """Process one price tick. Returns a fill event dict or ``None``.
+
+        This uses the same single-price rule primitives as the close-only
+        backtest (:func:`_should_enter` / :func:`_should_exit`), so feeding bar
+        closes through here reproduces the close-only backtest trade-for-trade.
+        Live ticks have no high/low, so there is no intrabar model here; the
+        ``use_intrabar`` flag is a backtest-only refinement.
+        """
         if price <= 0 or math.isnan(price):
             return None
 
         if self.state == "flat":
             if self.last_exit_price is None:
                 if not self.params.enter_at_start:
+                    # Arm the re-entry trigger at the first price seen, matching
+                    # the backtest, instead of never buying.
+                    self.last_exit_price = price
                     return None
                 return self._enter(price)
-            if price >= self.last_exit_price + self.params.reentry:
+            if _should_enter(price, self.last_exit_price,
+                             self.params.reentry, self.params.enter_at_start):
                 return self._enter(price)
             return None
 
-        # long
+        # long — check the stop against the prior peak BEFORE extending it, so
+        # the streaming engine agrees with the close-only backtest.
         assert self.peak is not None
-        self.peak = max(self.peak, price)
-        if price <= self.peak - self.params.trail:
+        if _should_exit(price, self.peak, self.params.trail):
             return self._exit(price)
+        self.peak = max(self.peak, price)
         return None
 
     def _enter(self, price: float) -> dict:

@@ -37,15 +37,24 @@ def _stop(signum, frame):  # pragma: no cover - signal handler
 
 def load_state(path: str, params: StrategyParams) -> StreamingStrategy:
     if path and os.path.exists(path):
-        with open(path) as f:
-            return StreamingStrategy.from_dict(json.load(f))
+        try:
+            with open(path) as f:
+                return StreamingStrategy.from_dict(json.load(f))
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            print(f"  warning: could not read state file '{path}' ({exc}); "
+                  "starting from a fresh position.")
     return StreamingStrategy(params)
 
 
 def save_state(path: str, strat: StreamingStrategy) -> None:
-    if path:
-        with open(path, "w") as f:
-            json.dump(strat.to_dict(), f, indent=2)
+    if not path:
+        return
+    # Write to a temp file and atomically replace, so a crash mid-write cannot
+    # truncate the existing good state to an empty/partial file.
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(strat.to_dict(), f, indent=2)
+    os.replace(tmp, path)
 
 
 def log_fill(path: str, ticker: str, event: dict) -> None:
@@ -79,6 +88,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
+    global _running
+    _running = True  # reset so re-invocation in the same process actually runs
     args = build_parser().parse_args(argv)
     signal.signal(signal.SIGINT, _stop)
 
@@ -87,19 +98,35 @@ def main(argv=None) -> int:
         enter_at_start=not args.no_start_entry,
     )
     strat = load_state(args.state_file, params)
-    # keep params in sync if they changed between runs
-    strat.params = params
+    # Only adopt CLI params when flat. Overwriting the params of an OPEN
+    # position would silently move its stop (e.g. resuming without re-passing
+    # --trail would reset the trail to the default and shift the live stop).
+    if strat.state == "flat":
+        strat.params = params
+    elif (strat.params.trail, strat.params.reentry) != (params.trail, params.reentry):
+        print(f"  note: resuming an OPEN position; keeping its saved params "
+              f"(trail ${strat.params.trail:g}, reentry +${strat.params.reentry:g}). "
+              "CLI trail/reentry are ignored until the position closes.")
 
     print(f"Paper trading {args.ticker}  (trail ${params.trail:g}, re-entry +${params.reentry:g})")
     print(f"Polling every {args.poll:g}s — simulated fills only, no real orders. Ctrl-C to stop.\n")
 
     i = 0
+    consecutive_failures = 0
+    max_failures = 5
     while _running:
         i += 1
         try:
             price = data_mod.latest_price(args.ticker)
+            consecutive_failures = 0
         except Exception as exc:
-            print(f"  [{dt.datetime.now():%H:%M:%S}] price fetch failed: {exc}")
+            consecutive_failures += 1
+            print(f"  [{dt.datetime.now():%H:%M:%S}] price fetch failed "
+                  f"({consecutive_failures}/{max_failures}): {exc}")
+            if consecutive_failures >= max_failures:
+                print("  giving up after repeated price-fetch failures "
+                      "(check the ticker symbol / network).")
+                break
             if args.iterations and i >= args.iterations:
                 break
             _sleep(args.poll)

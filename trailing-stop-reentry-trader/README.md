@@ -77,9 +77,18 @@ losing the position. Live prices only move while the market is open.
 
 With intrabar mode on (the default), within each bar the stop is checked
 against the *prior* peak using the bar's low **before** the high extends the
-peak; a gap below the stop fills at the open. This is intentionally
+peak; a gap below the stop fills at the open. The entry bar is managed on the
+same bar it opens (its high extends the peak, its low can stop it out), and the
+re-entry and stop can both fire within one bar. This is intentionally
 conservative so results aren't flattered. Pass `--close-only` for simple
 close-to-close decisions.
+
+The intrabar model is **backtest-only** — it needs each bar's high/low. The
+live paper engine (`StreamingStrategy`) sees one price at a time, so it uses the
+close-only rule and reproduces the `--close-only` backtest tick-for-tick. Both
+paths share the same entry/exit primitives in `strategy.py`, so they can't drift
+apart. With `--no-start-entry`, the re-entry trigger is armed at the first price
+and the strategy buys on the first move `reentry` dollars above it.
 
 ## Important
 

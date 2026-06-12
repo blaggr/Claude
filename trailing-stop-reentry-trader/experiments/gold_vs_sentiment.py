@@ -48,8 +48,11 @@ def load_data():
     sent.index = s["m"]
     sent = sent.rename("sent").dropna()
 
-    df = pd.concat([gold, sent], axis=1).dropna().sort_index()
-    return df.iloc[-(YEARS * 12 + 1):]  # +1 so we have a base month for returns
+    # Return the FULL overlapping history. Truncating to the evaluation window
+    # here would make rolling(12) burn the first 11 months as NaN and silently
+    # evaluate the vs-12m strategies over a shorter, different window than the
+    # others. run() slices to the shared window AFTER computing the signals.
+    return pd.concat([gold, sent], axis=1).dropna().sort_index()
 
 
 def metrics(monthly_ret: pd.Series) -> dict:
@@ -78,6 +81,7 @@ def run():
     fwd_ret = gold_ret.shift(-1)                 # month t+1 return (what we earn)
     sent = df["sent"]
 
+    # Signals computed on the FULL history so the 12-month mean has its lookback.
     sig_mom = -np.sign(sent.diff())
     sig_ma = -np.sign(sent - sent.rolling(12).mean())
 
@@ -89,13 +93,18 @@ def run():
         "Gold buy & hold": fwd_ret,
     }
 
-    win = df.index
-    print(f"Window: {win[1]} -> {win[-1]}  ({len(win)-1} months of returns)")
-    print(f"Gold:  ${df['gold'].iloc[0]:.0f} -> ${df['gold'].iloc[-1]:.0f}")
-    print(f"Sentiment: {sent.iloc[0]:.1f} -> {sent.iloc[-1]:.1f}")
+    # Restrict EVERY strategy to the same evaluation window (last YEARS*12+1
+    # months), so the table compares like with like.
+    win = df.index[-(YEARS * 12 + 1):]
+    strategies = {name: r.reindex(win) for name, r in strategies.items()}
 
-    # premise check: correlation of gold's fwd return with the sentiment change
-    valid = pd.concat([sent.diff(), fwd_ret], axis=1).dropna()
+    print(f"Window: {win[1]} -> {win[-1]}  ({len(win)-1} months of returns)")
+    print(f"Gold:  ${df['gold'].reindex(win).iloc[0]:.0f} -> ${df['gold'].iloc[-1]:.0f}")
+    print(f"Sentiment: {sent.reindex(win).iloc[0]:.1f} -> {sent.iloc[-1]:.1f}")
+
+    # premise check: correlation of gold's fwd return with the sentiment change,
+    # over the same evaluation window as the table.
+    valid = pd.concat([sent.diff(), fwd_ret], axis=1).reindex(win).dropna()
     corr = valid.iloc[:, 0].corr(valid.iloc[:, 1])
     print(f"\nCorr(Δsentiment, next-month gold return) = {corr:+.3f}  "
           f"(premise wants this NEGATIVE)\n")
