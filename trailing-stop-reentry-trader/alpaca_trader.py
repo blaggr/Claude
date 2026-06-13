@@ -30,7 +30,9 @@ import sys
 import time
 from typing import Optional
 
-FLAT_CONFIRM = 2   # consecutive empty position() reads before declaring an external close
+FLAT_CONFIRM = 2       # consecutive empty position() reads (across cycles) before declaring flat
+POSITION_RETRIES = 3   # in-cycle position() reads to tolerate the eventually-consistent endpoint
+POSITION_SETTLE = 0.25 # seconds between in-cycle position retries
 
 import risk
 from broker import AlpacaBroker, Broker, BrokerError
@@ -73,20 +75,32 @@ class AlpacaTrader:
         try:
             with open(self.state_file) as f:
                 d = json.load(f)
+            # Parse EVERYTHING into locals first; commit to self.* only once all
+            # fields parse. Otherwise a malformed field (e.g. order_seq="X") throws
+            # mid-assignment, leaving a half-loaded trader that thinks it is long
+            # while its risk baselines are wiped.
             strat = StreamingStrategy.from_dict(d["strat"])
-            if strat.state == "flat":           # only adopt fresh params when flat
-                strat.params = params
-            self.strat = strat
-            self.day = d.get("day")
-            self.intended_long = bool(d.get("intended_long", False))
-            self.order_seq = int(d.get("order_seq", 0) or 0)
-            self.pending_qty = self._as_float(d.get("pending_qty")) or 0.0
-            self.day_start_equity = self._as_float(d.get("day_start_equity"))
-            self.last_equity = self._as_float(d.get("last_equity"))
-            self.peak_equity = self._as_float(d.get("peak_equity"))
+            day = d.get("day")
+            intended_long = bool(d.get("intended_long", False))
+            order_seq = int(d.get("order_seq", 0) or 0)
+            pending_qty = self._as_float(d.get("pending_qty")) or 0.0
+            day_start_equity = self._as_float(d.get("day_start_equity"))
+            last_equity = self._as_float(d.get("last_equity"))
+            peak_equity = self._as_float(d.get("peak_equity"))
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             # self.strat is the safe default assigned in __init__, so this is safe.
             self._journal("state_load_failed", {"error": str(exc)})
+            return
+        if strat.state == "flat":               # only adopt fresh params when flat
+            strat.params = params
+        self.strat = strat
+        self.day = day
+        self.intended_long = intended_long
+        self.order_seq = order_seq
+        self.pending_qty = pending_qty
+        self.day_start_equity = day_start_equity
+        self.last_equity = last_equity
+        self.peak_equity = peak_equity
 
     @staticmethod
     def _as_float(v) -> Optional[float]:
@@ -105,6 +119,23 @@ class AlpacaTrader:
         if not self.pending_qty:
             return False
         return abs(broker_qty - self.pending_qty) <= max(1.0, 0.05 * self.pending_qty)
+
+    def _poll_position(self):
+        """Read position() with brief in-cycle retries to tolerate the
+        eventually-consistent positions endpoint. Returns the held position
+        (qty > 0) as soon as one read shows it, or None only after every retry
+        comes back empty. A read error is swallowed to None (callers that must
+        bias to 'still held' check separately)."""
+        for i in range(POSITION_RETRIES):
+            try:
+                pos = self.broker.position(self.symbol)
+            except BrokerError:
+                pos = None
+            if pos and pos["qty"] > 0:
+                return pos
+            if i < POSITION_RETRIES - 1:
+                time.sleep(POSITION_SETTLE)
+        return None
 
     def _save(self) -> None:
         if not self.state_file:
@@ -139,7 +170,13 @@ class AlpacaTrader:
                    confirmed (the positions endpoint is eventually-consistent);
                    skip trading this cycle so we never re-buy on a transient lag.
         """
-        pos = self.broker.position(self.symbol)
+        try:
+            pos = self.broker.position(self.symbol)
+        except BrokerError:
+            # A failed read is NOT evidence of flat — reset the consecutive-empty
+            # counter and let the run loop's error handling deal with it.
+            self.flat_reads = 0
+            raise
         if pos and pos["qty"] > 0:
             self.flat_reads = 0
             if self.strat.state == "long":
@@ -264,20 +301,26 @@ class AlpacaTrader:
             self.pending_qty = 0.0
             self._journal("buy_rejected", {"error": str(exc)})
             return False
-        # The BROKER POSITION is the source of truth for whether/how much we hold —
-        # not the fill dict (which can be a mid-flight partial snapshot). Use the
-        # fill only for the price; size pending_qty from the real position.
-        pos = self.broker.position(self.symbol)
-        if not pos or pos["qty"] < 1:
-            self.intended_long = False
-            self.pending_qty = 0.0
-            self._journal("buy_unfilled", {})
+        # Determine the held size from the broker, tolerating the eventually-
+        # consistent positions endpoint with brief retries. If the order returned
+        # a fill, we DEFINITELY hold — never conclude "unfilled" on a lagging
+        # position read (that previously flipped us flat on a paid order and then
+        # halted on our own position next cycle).
+        pos = self._poll_position()
+        filled = fill["filled_qty"] if (fill and fill["filled_qty"] >= 1) else 0
+        held = pos["qty"] if (pos and pos["qty"] >= 1) else filled
+        if held < 1:
+            # Ambiguous: no fill reported and no position seen. Keep intended_long
+            # and pending_qty so that if this was an extreme-lag fill, the next
+            # cycle's reconcile adopts it (size-matched) BEFORE any re-buy. Roll
+            # the strategy back to flat for now.
+            self._journal("buy_unconfirmed", {})
             return False
         self.strat.entry_price = fill["fill_price"] if fill else pos["avg_entry_price"]
         self.strat.peak = self.strat.entry_price
-        self.pending_qty = pos["qty"]                # actual filled size (handles partials)
+        self.pending_qty = held                      # actual filled size (handles partials)
         self.flat_reads = 0
-        self._journal("BUY", {"qty": pos["qty"], "fill_price": self.strat.entry_price})
+        self._journal("BUY", {"qty": held, "fill_price": self.strat.entry_price})
         return True
 
     def _do_sell(self, price: float) -> bool:
@@ -306,18 +349,27 @@ class AlpacaTrader:
 
     def _flatten_and_halt(self, reason: str) -> None:
         self.broker.flatten_all()
-        # flatten_all is best-effort (it swallows broker errors). Confirm the
-        # position is actually gone before claiming flat — otherwise we'd persist
-        # a flat state while shares ride with no stop, and a restart would treat
-        # our own abandoned position as "unmanaged".
-        try:
-            pos = self.broker.position(self.symbol)
-        except BrokerError:
-            pos = {"qty": 1.0}        # assume still held if we can't confirm
-        if pos and pos["qty"] > 0:
+        # flatten_all is best-effort (it swallows broker errors). Only claim flat
+        # if we CONFIRM the position is gone across retries (the positions endpoint
+        # lags, and a single empty read after a possibly-failed liquidation is not
+        # proof). Bias to "still held": any held read OR a read error keeps us long
+        # so a restart re-adopts and retries, rather than abandoning a stop-less
+        # position during the exact event (kill / loss / drawdown) when it matters.
+        confirmed_empty = True
+        for i in range(POSITION_RETRIES):
+            try:
+                pos = self.broker.position(self.symbol)
+            except BrokerError:
+                confirmed_empty = False     # could not confirm -> assume held
+                break
+            if pos and pos["qty"] > 0:
+                confirmed_empty = False
+                break
+            if i < POSITION_RETRIES - 1:
+                time.sleep(POSITION_SETTLE)
+        if not confirmed_empty:
             self._save()              # keep state long so a restart re-adopts & retries
-            self._journal("halt_flatten_unconfirmed",
-                          {"reason": reason, "still_holding": pos["qty"]})
+            self._journal("halt_flatten_unconfirmed", {"reason": reason})
             return
         self.strat.state = "flat"
         self.strat.entry_price = None

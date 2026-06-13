@@ -14,6 +14,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import risk  # noqa: E402
+import alpaca_trader as at  # noqa: E402
 from broker import BrokerError  # noqa: E402
 from alpaca_trader import AlpacaTrader  # noqa: E402
 from strategy import StrategyParams  # noqa: E402
@@ -40,6 +41,7 @@ class FakeBroker:
         self.reject_dupe_coid = reject_dupe_coid
         self._pos = None
         self.hide_position = 0          # >0: next N position() reads return None (endpoint lag)
+        self.position_script = None     # optional deque of None|"ERR"|dict for exact sequences
         self.orders = []
         self.coids = []
         self.flatten_calls = 0
@@ -51,6 +53,11 @@ class FakeBroker:
         return {"equity": self.equity, "cash": self.cash, "status": "ACTIVE"}
 
     def position(self, symbol):
+        if self.position_script:                 # scripted sequence: None | "ERR" | dict
+            item = self.position_script.popleft()
+            if item == "ERR":
+                raise BrokerError("transient 503", code=503)
+            return item
         if self.hide_position > 0:
             self.hide_position -= 1
             return None
@@ -99,6 +106,7 @@ class FakeBroker:
 @pytest.fixture(autouse=True)
 def _isolate_kill_file(tmp_path, monkeypatch):
     monkeypatch.setattr(risk, "KILL_FILE", str(tmp_path / "KILL"))
+    monkeypatch.setattr(at.time, "sleep", lambda s: None)   # make position retries instant
 
 
 def _trader(broker, tmp_path, **params):
@@ -250,6 +258,7 @@ def test_reconcile_flat_arms_reentry_from_current_price_not_entry(tmp_path):
     t = _trader(b, tmp_path, reentry=1)
     t.strat.state = "long"; t.strat.entry_price = 100.0; t.strat.peak = 130.0
     t.intended_long = True
+    t.pending_qty = 95.0                               # nonzero so the clear actually bites
     b._pos = None
     assert t.reconcile(130.0) == "wait"                # 1st empty read: unconfirmed
     assert t.reconcile(130.0) == "ok"                  # 2nd: confirmed flat
@@ -330,17 +339,51 @@ def test_flatten_unconfirmed_keeps_engine_long(tmp_path):
     assert any("halt_flatten_unconfirmed" in l for l in open(t.journal_file))
 
 
-def test_state_file_with_infinity_is_sanitized(tmp_path):
+def test_infinity_in_state_does_not_disable_the_drawdown_limit(tmp_path):
+    # A hand-edited state with Infinity must not poison the limits. Prove the
+    # drawdown limit still FIRES after loading such a state (not just that the
+    # field is None) by driving a real breach.
     sf = tmp_path / "state.json"
     sf.write_text('{"strat": {"params": {"trail": 1.0, "reentry": 1.0, '
                   '"enter_at_start": true}, "state": "flat", "peak": null, '
                   '"entry_price": null, "last_exit_price": null}, '
                   '"peak_equity": Infinity, "day_start_equity": Infinity}')
-    b = FakeBroker([100.0])
+    b = FakeBroker([100.0, 100.0])
     t = AlpacaTrader(b, "SPY", StrategyParams(trail=1), state_file=str(sf),
                      journal_file=str(tmp_path / "j.jsonl"))
     assert t.peak_equity is None                        # Infinity rejected on load
-    assert t.day_start_equity is None                   # so the limits cannot be disabled
+    t.step()                                            # peak re-seeds from finite equity 10000
+    b.equity = 8_000.0                                  # -20% from the real peak
+    b.timestamp = "2024-03-05T10:00:00-05:00"
+    assert t.step() == "halt"                           # drawdown limit fires (not disabled)
+    assert risk.kill_switch_active()
+
+
+def test_load_bad_order_seq_keeps_safe_default(tmp_path):
+    # A malformed field must not half-load a LONG strategy with wiped baselines.
+    sf = tmp_path / "state.json"
+    sf.write_text('{"strat": {"params": {"trail": 2.0, "reentry": 1.0, '
+                  '"enter_at_start": true}, "state": "long", "peak": 105.0, '
+                  '"entry_price": 100.0, "last_exit_price": null}, '
+                  '"order_seq": "X", "intended_long": true, "pending_qty": 95.0}')
+    b = FakeBroker([100.0])
+    t = AlpacaTrader(b, "SPY", StrategyParams(trail=2), state_file=str(sf),
+                     journal_file=str(tmp_path / "j.jsonl"))
+    assert t.strat.state == "flat"                      # did NOT half-adopt the long
+    assert t.intended_long is False
+    assert any("state_load_failed" in l for l in open(tmp_path / "j.jsonl"))
+
+
+def test_buy_survives_post_fill_position_lag(tmp_path):
+    # The order fills but the positions endpoint lags every read this cycle. The
+    # engine must stay LONG (off the fill), not flip to flat and halt next cycle.
+    b = FakeBroker([100.0])
+    b.hide_position = 99                                # position() lags indefinitely this cycle
+    t = _trader(b, tmp_path, trail=2)
+    t.step()
+    assert t.strat.state == "long"                      # held off the fill, not orphaned
+    assert t.pending_qty == 95.0
+    assert t.intended_long is True
 
 
 def test_corrupt_state_file_recovers_instead_of_crashing(tmp_path):
@@ -393,6 +436,35 @@ def test_total_drawdown_limit_halts_on_slow_bleed(tmp_path):
     assert b.flatten_calls == 1
     assert risk.kill_switch_active()
     assert any("total drawdown" in l for l in open(t.journal_file))   # not the daily limit
+
+
+def test_flat_reads_reset_on_held_read_blocks_nonconsecutive_confirm(tmp_path):
+    # Empty reads separated by a HELD read must NOT accumulate to a confirmed
+    # flat — flat_reads resets whenever the position is seen.
+    b = FakeBroker([100.0])
+    t = _trader(b, tmp_path, trail=2)
+    t.strat.state = "long"; t.strat.entry_price = 100.0; t.strat.peak = 100.0
+    t.intended_long = True; t.pending_qty = 95.0
+    b.position_script = deque([None, {"qty": 95.0, "avg_entry_price": 100.0}, None])
+    assert t.reconcile(100.0) == "wait"                # empty #1
+    assert t.reconcile(100.0) == "ok"                  # held -> resets flat_reads
+    assert t.reconcile(100.0) == "wait"                # empty again, only #1 consecutive
+    assert t.strat.state == "long"                     # never falsely confirmed flat
+
+
+def test_flat_reads_reset_on_read_error(tmp_path):
+    # A position() ERROR between two empty reads is not evidence of flat; it must
+    # reset the consecutive counter so [empty, ERR, empty] does not confirm flat.
+    b = FakeBroker([100.0])
+    t = _trader(b, tmp_path, trail=2)
+    t.strat.state = "long"; t.strat.entry_price = 100.0; t.strat.peak = 100.0
+    t.intended_long = True; t.pending_qty = 95.0
+    b.position_script = deque([None, "ERR", None])
+    assert t.reconcile(100.0) == "wait"                # empty #1
+    with pytest.raises(BrokerError):
+        t.reconcile(100.0)                             # error resets flat_reads, re-raises
+    assert t.reconcile(100.0) == "wait"                # empty again, only #1 (not confirmed)
+    assert t.strat.state == "long"
 
 
 def test_reconcile_rejects_position_of_wrong_size(tmp_path):
