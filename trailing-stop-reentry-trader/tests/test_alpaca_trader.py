@@ -24,7 +24,7 @@ _DONE = ("filled", "canceled", "expired", "rejected", "done_for_day")
 class FakeBroker:
     def __init__(self, prices, *, is_open=True, equity=10_000.0, cash=10_000.0,
                  timestamp="2024-03-01T10:00:00-05:00", slippage=0.0,
-                 stop_raises=False, hide_position=0):
+                 stop_raises=False, hide_position=0, buy_raises_once=False):
         self._prices = deque(prices)
         self._last = prices[0] if prices else 0.0
         self.is_open = is_open
@@ -34,6 +34,7 @@ class FakeBroker:
         self.slippage = slippage
         self.stop_raises = stop_raises
         self.hide_position = hide_position
+        self.buy_raises_once = buy_raises_once
         self._pos = None
         self.orders = {}                 # id -> order dict
         self._oid = 0
@@ -63,9 +64,18 @@ class FakeBroker:
     # orders
     def buy(self, symbol, qty, *, extended_hours=False, limit_price=None, client_order_id=None):
         fp = self._last + self.slippage
-        self._pos = {"qty": float(qty), "avg_entry_price": fp}
+        self._oid += 1
+        oid = f"o{self._oid}"
+        self.orders[oid] = {"id": oid, "client_order_id": client_order_id, "status": "filled",
+                            "filled_qty": float(qty), "filled_avg_price": fp, "qty": qty}
         self.buys.append((qty, fp, client_order_id))
         self.cash -= qty * fp
+        if self.buy_raises_once:
+            # Order is ACCEPTED+filled at the broker (recorded above), but the
+            # client loses the confirmation and the position read lags.
+            self.buy_raises_once = False
+            raise BrokerError("lost confirmation 503", code=503)
+        self._pos = {"qty": float(qty), "avg_entry_price": fp}
         return {"filled_qty": float(qty), "fill_price": fp}
 
     def submit_trailing_stop(self, symbol, qty, trail_price, *, client_order_id=None):
@@ -73,13 +83,19 @@ class FakeBroker:
             raise BrokerError("stop rejected", code=403)
         self._oid += 1
         oid = f"o{self._oid}"
-        self.orders[oid] = {"id": oid, "status": "new", "filled_avg_price": None,
-                            "qty": qty, "trail": trail_price}
+        self.orders[oid] = {"id": oid, "client_order_id": client_order_id, "status": "new",
+                            "filled_avg_price": None, "qty": qty, "trail": trail_price}
         self.stop_id = oid
         return {"id": oid}
 
     def get_order(self, order_id):
         return dict(self.orders[order_id]) if order_id in self.orders else None
+
+    def get_order_by_client_id(self, client_order_id):
+        for o in self.orders.values():
+            if o.get("client_order_id") == client_order_id:
+                return dict(o)
+        return None
 
     def open_orders(self, symbol):
         return [dict(o) for o in self.orders.values() if o["status"] not in _DONE]
@@ -222,6 +238,49 @@ def test_transient_position_lag_while_long_does_not_flip_flat(tmp_path):
     assert len(b.buys) == 1                            # no re-buy
 
 
+def test_lost_confirmation_does_not_double_buy(tmp_path):
+    # The entry order fills at the broker but the client loses the confirmation
+    # (503), and the position read lags. The persisted client_order_id must let
+    # the next cycle RECOVER the order instead of submitting a second one.
+    b = FakeBroker([100.0, 100.0], buy_raises_once=True, hide_position=9)
+    t = _trader(b, tmp_path, trail=2)
+    t.step()                                           # buy raises; intent persisted, order live
+    assert t.mode == "flat"
+    assert t.entry_coid is not None                    # intent kept for recovery
+    coid1 = t.entry_coid
+    t.step()                                           # recover by coid -> adopt; NO second buy
+    assert len([x for x in b.buys]) == 1               # only ONE order ever submitted
+    assert t.mode == "long"
+    assert t.entry_coid is None                         # intent resolved
+    # the single submitted order carried the persisted, reused coid
+    assert b.buys[0][2] == coid1
+
+
+def test_entry_recovers_rejected_order_then_can_retry(tmp_path):
+    # If the recovered order is rejected, the intent clears so a fresh attempt can
+    # happen later (no permanent wedge).
+    b = FakeBroker([100.0])
+    t = _trader(b, tmp_path, trail=2)
+    t.entry_coid = "SPY-0-buy"
+    b.orders["x"] = {"id": "x", "client_order_id": "SPY-0-buy", "status": "rejected"}
+    t._enter(100.0)
+    assert t.entry_coid is None
+    assert t.mode == "flat"
+    assert b.buys == []                                # did not blindly re-buy
+
+
+def test_unknown_recovery_does_not_resubmit(tmp_path):
+    # If the recover-by-coid read itself fails (can't tell if the order exists),
+    # the trader must WAIT, never submit a possible duplicate.
+    b = FakeBroker([100.0])
+    t = _trader(b, tmp_path, trail=2)
+    t.entry_coid = "SPY-0-buy"                         # an in-flight intent
+    b.get_order_by_client_id = lambda coid: (_ for _ in ()).throw(BrokerError("503", code=503))
+    t._enter(100.0)
+    assert b.buys == []                                # waited, did not re-buy
+    assert t.entry_coid == "SPY-0-buy"                 # intent kept for the next cycle
+
+
 def test_503_storm_keeps_stop_resting_does_not_abandon(tmp_path):
     b = FakeBroker([100.0])
     t = _trader(b, tmp_path, trail=2)
@@ -246,8 +305,8 @@ def test_kill_switch_cancels_stop_and_flattens(tmp_path):
     stop = t.stop_order_id
     risk.trip_kill_switch("manual")
     assert t.step() == "halt"
-    assert stop in b.canceled
     assert b.flatten_calls == 1
+    assert b.orders[stop]["status"] == "canceled"      # flatten cancels the resting stop
     assert t.mode == "flat"
 
 

@@ -46,6 +46,7 @@ class Broker(Protocol):
     def submit_trailing_stop(self, symbol: str, qty: int, trail_price: float, *,
                              client_order_id: Optional[str] = None) -> dict: ...
     def get_order(self, order_id: str) -> Optional[dict]: ...
+    def get_order_by_client_id(self, client_order_id: str) -> Optional[dict]: ...
     def open_orders(self, symbol: str) -> list: ...
     def cancel_order(self, order_id: str) -> None: ...
 
@@ -251,6 +252,18 @@ class AlpacaBroker:
     def get_order(self, order_id: str) -> Optional[dict]:
         try:
             return self._api("GET", f"/v2/orders/{order_id}")
+        except BrokerError as e:
+            if e.code == 404:
+                return None
+            raise
+
+    def get_order_by_client_id(self, client_order_id: str) -> Optional[dict]:
+        """Look an order up by its client_order_id — the idempotency key. Lets the
+        trader recover an entry whose submit confirmation was lost, instead of
+        re-buying. Returns None if no such order exists."""
+        try:
+            return self._api("GET",
+                             f"/v2/orders:by_client_order_id?client_order_id={client_order_id}")
         except BrokerError as e:
             if e.code == 404:
                 return None

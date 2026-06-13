@@ -51,9 +51,14 @@ broker**:
 Why server-side: the exit no longer depends on this process being alive and
 winning a race. If the worker crashes, lags, or the network drops, the
 protective stop is still resting at Alpaca. If the stop can't be attached after
-a buy, the trader **flattens immediately** rather than hold a naked position. A
-lagging position read only delays re-entry; it can't cause a double-buy (entries
-are gated on the broker showing truly flat) or abandon a position.
+a buy, the trader gets **flat** rather than hold a naked position (and if it
+can't get flat, it re-attaches a stop and alerts — never naked).
+
+Double-buys are prevented by **idempotency, not by reading positions**: each
+entry intent gets one `client_order_id`, persisted before the order and reused
+on every retry. If a submit's confirmation is lost, the next cycle **recovers
+the order by that id** (and Alpaca dedups a resubmit of the same id) instead of
+firing a second order. A lagging position read only delays re-entry.
 
 ## Risk controls (`risk.py`)
 

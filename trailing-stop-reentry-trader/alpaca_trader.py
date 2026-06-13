@@ -65,6 +65,7 @@ class AlpacaTrader:
         self.entry_price: Optional[float] = None
         self.held_qty = 0.0
         self.stop_order_id: Optional[str] = None
+        self.entry_coid: Optional[str] = None    # idempotency key of an in-flight entry
         self.armed = False                       # has the first-ever entry been taken?
         self.order_seq = 0
         self.day_start_equity: Optional[float] = None
@@ -91,6 +92,7 @@ class AlpacaTrader:
             mode = d["mode"] if d.get("mode") in ("flat", "long") else "flat"
             order_seq = int(d.get("order_seq", 0) or 0)
             stop_order_id = d.get("stop_order_id")
+            entry_coid = d.get("entry_coid")
             armed = bool(d.get("armed", False))
             last_exit = self._as_float(d.get("last_exit_price"))
             entry = self._as_float(d.get("entry_price"))
@@ -105,6 +107,7 @@ class AlpacaTrader:
         self.mode = mode
         self.order_seq = order_seq
         self.stop_order_id = stop_order_id
+        self.entry_coid = entry_coid
         self.armed = armed
         self.last_exit_price = last_exit
         self.entry_price = entry
@@ -121,7 +124,8 @@ class AlpacaTrader:
         with open(tmp, "w") as f:
             json.dump({"mode": self.mode, "last_exit_price": self.last_exit_price,
                        "entry_price": self.entry_price, "held_qty": self.held_qty,
-                       "stop_order_id": self.stop_order_id, "armed": self.armed,
+                       "stop_order_id": self.stop_order_id, "entry_coid": self.entry_coid,
+                       "armed": self.armed,
                        "order_seq": self.order_seq, "day": self.day,
                        "day_start_equity": self.day_start_equity,
                        "last_equity": self.last_equity, "peak_equity": self.peak_equity},
@@ -167,17 +171,6 @@ class AlpacaTrader:
         except BrokerError:
             return True            # can't tell -> assume it's still resting (don't double-place)
         return bool(o) and o.get("status") not in _STOP_DONE
-
-    def _stop_fill_price(self) -> Optional[float]:
-        if not self.stop_order_id:
-            return None
-        try:
-            o = self.broker.get_order(self.stop_order_id)
-        except BrokerError:
-            return None
-        if o and o.get("status") == "filled":
-            return self._as_float(o.get("filled_avg_price"))
-        return None
 
     def _place_stop(self, qty: float) -> bool:
         """Attach a protective server-side trailing stop. Returns True on success."""
@@ -288,12 +281,19 @@ class AlpacaTrader:
                     self._flatten_and_halt("could not re-place protective stop")
                     return "halt"
                 return "ok"
-            # Position reads empty. Decide if it is a REAL close or just lag:
-            fill = self._stop_fill_price()
-            if fill is not None:                       # the stop genuinely fired
-                self._exit_to_flat(fill, "STOPPED_OUT")
+            # Position reads empty. Inspect OUR stop order to classify it.
+            try:
+                o = self.broker.get_order(self.stop_order_id) if self.stop_order_id else None
+            except BrokerError:
+                return "ok"                            # can't tell -> stay long (stop may rest)
+            st = o.get("status") if o else None
+            if st == "filled":                         # the stop genuinely fired
+                px = self._as_float(o.get("filled_avg_price"))
+                if not (px and px > 0):                # null/0/garbage avg -> best-effort basis
+                    px = price
+                self._exit_to_flat(px, "STOPPED_OUT")
                 return "ok"
-            if not self._stop_is_open():               # position gone AND stop gone -> closed
+            if o is None or st in _STOP_DONE:          # position gone AND stop gone -> closed
                 self._exit_to_flat(price, "closed_externally")
                 return "ok"
             # empty position but the stop is still resting -> transient lag; stay long
@@ -312,78 +312,141 @@ class AlpacaTrader:
             self._journal("adopt_long", {"qty": pos["qty"], "entry": pos["avg_entry_price"]})
         return "ok"
 
-    # --------------------------------------------------------- entry
-    def _enter(self, price: float) -> None:
-        # Only enter when the broker confirms we are truly flat — no position AND
-        # no resting order. This makes a double-buy impossible regardless of any
-        # position-read lag or a premature flat in _sync.
+    # --------------------------------------------------------- entry (idempotent)
+    def _recover_order(self, coid: str) -> str:
+        """Classify the broker's record of our entry order, by client_order_id.
+        Returns 'filled' | 'working' | 'rejected' | 'absent' | 'unknown'. On any
+        read failure returns 'unknown' so the caller WAITS rather than re-buying."""
         try:
-            if self.broker.position(self.symbol) or self.broker.open_orders(self.symbol):
-                self._journal("skip_buy", {"reason": "not flat at broker"})
-                return
+            o = self.broker.get_order_by_client_id(coid)
         except BrokerError:
-            self._journal("skip_buy", {"reason": "could not confirm flat at broker"})
-            return
+            return "unknown"
+        if o is None:
+            return "absent"
+        st = o.get("status")
+        if st == "filled":
+            self._recovered = o
+            return "filled"
+        if st in ("canceled", "expired", "rejected"):
+            return "rejected"
+        return "working"
+
+    def _enter(self, price: float) -> None:
         acct = self.broker.account()
         qty = risk.entry_qty(acct["cash"], price)
         if qty < 1:
             self._journal("skip_buy", {"reason": "insufficient cash", "cash": acct["cash"]})
             return
-        coid = self._next_coid("buy")
-        self._save()                              # persist consumed seq before the order
-        try:
-            fill = self.broker.buy(self.symbol, qty, client_order_id=coid)
-        except BrokerError as exc:
-            self._journal("buy_rejected", {"error": str(exc)})
+        # One client_order_id PER ENTRY INTENT, persisted BEFORE any order and
+        # REUSED across retries. The broker dedups on it and we recover by it, so
+        # a lost submit-confirmation can never become a second order.
+        if self.entry_coid is None:
+            self.entry_coid = self._next_coid("buy")
+            self._save()
+        coid = self.entry_coid
+
+        self._recovered = None
+        state = self._recover_order(coid)
+        if state == "working" or state == "unknown":
+            self._journal("entry_pending", {"coid": coid, "state": state})
+            return                                # order is (maybe) live — never submit a duplicate
+        if state == "rejected":
+            self.entry_coid = None                # clean failure — a fresh intent may try later
+            self._journal("entry_failed", {"coid": coid})
             return
+        fill = None
+        if state == "filled":
+            o = self._recovered
+            fill = {"filled_qty": self._as_float(o.get("filled_qty")) or 0.0,
+                    "fill_price": self._as_float(o.get("filled_avg_price"))}
+        else:                                     # 'absent' — never reached the broker; submit it
+            try:
+                fill = self.broker.buy(self.symbol, qty, client_order_id=coid)
+            except BrokerError as exc:
+                # The order may or may not have reached the broker. KEEP entry_coid
+                # so the next cycle recovers it by coid instead of re-buying.
+                self._journal("buy_inflight_will_recover", {"coid": coid, "error": str(exc)})
+                return
+        # Confirm a real position before declaring long.
         pos = self._poll_position()
         held = (pos["qty"] if pos and pos["qty"] >= 1
                 else (fill["filled_qty"] if fill and fill["filled_qty"] >= 1 else 0))
         if held < 1:
-            # Nothing confirmed held. The idempotent coid makes a retry safe; the
-            # next cycle's _sync adopts a lagged fill if one appears.
-            self._journal("buy_unconfirmed", {})
-            return
-        self.entry_price = pos["avg_entry_price"] if pos else fill["fill_price"]
+            self._journal("entry_awaiting_position", {"coid": coid})
+            return                                # keep entry_coid; recover next cycle
+        entry_px = pos["avg_entry_price"] if pos else fill.get("fill_price")
+        if not (entry_px and entry_px > 0):
+            entry_px = price                      # last-resort basis; never None/0
+        self.entry_price = entry_px
         self.held_qty = held
         self.armed = True
-        # Attach the protective stop IMMEDIATELY. If it cannot be placed, do not
-        # hold a naked position — flatten and stay out.
         if not self._place_stop(held):
+            # Could not attach a stop. Try to get FLAT (never hold naked).
             self.broker.flatten_all()
-            self.mode = "flat"
-            self.entry_price = None
-            self.held_qty = 0.0
-            self._journal("entry_unprotected_flattened", {})
+            if self._confirm_flat() is True:
+                self.mode = "flat"
+                self.entry_price = None
+                self.held_qty = 0.0
+                self.entry_coid = None
+                self._journal("entry_unprotected_flattened", {})
+                return
+            # Flatten did not confirm — make a last attempt to protect what we hold.
+            pos = self._poll_position()
+            if pos and self._place_stop(pos["qty"]):
+                self.mode = "long"
+                self.held_qty = pos["qty"]
+                self.entry_coid = None
+                self._journal("entry_protected_after_flatten_failed", {"qty": pos["qty"]})
+                return
+            # Naked and unprotectable — trip the kill switch and alert a human.
+            risk.trip_kill_switch("naked entry: could not protect or flatten")
+            self.mode = "long" if pos else "flat"
+            self.held_qty = pos["qty"] if pos else 0.0
+            self.entry_coid = None
+            self._journal("NAKED_ALERT", {"held": self.held_qty})
             return
         self.mode = "long"
+        self.entry_coid = None                    # intent resolved
         self._journal("BUY", {"qty": held, "fill_price": self.entry_price})
 
-    # --------------------------------------------------------- halt
-    def _flatten_and_halt(self, reason: str) -> None:
-        if self.stop_order_id:
-            self.broker.cancel_order(self.stop_order_id)
-        self.broker.flatten_all()
-        confirmed_empty = True
+    def _confirm_flat(self):
+        """Return True if the broker is confirmed flat across retries, False if a
+        position is seen, None if it could not be read."""
         for i in range(POSITION_RETRIES):
             try:
                 pos = self.broker.position(self.symbol)
             except BrokerError:
-                confirmed_empty = False
-                break
+                return None
             if pos and pos["qty"] > 0:
-                confirmed_empty = False
-                break
+                return False
             if i < POSITION_RETRIES - 1:
                 time.sleep(POSITION_SETTLE)
-        if not confirmed_empty:
+        return True
+
+    # --------------------------------------------------------- halt
+    def _flatten_and_halt(self, reason: str) -> None:
+        # flatten_all (DELETE /v2/positions?cancel_orders=true) cancels the resting
+        # stop AND liquidates. Do NOT pre-cancel the stop ourselves — if the
+        # liquidation then fails we must never be left holding with no stop.
+        self.broker.flatten_all()
+        flat = self._confirm_flat()
+        if flat is not True:
+            # Still holding (or unknown) — re-attach a protective stop so the
+            # position is never naked, keep mode long so a restart retries.
+            pos = self._poll_position()
+            if pos:
+                self.held_qty = pos["qty"]
+                self.stop_order_id = None
+                self._ensure_protected(pos)
+            self.mode = "long"
             self._save()
-            self._journal("halt_flatten_unconfirmed", {"reason": reason})
+            self._journal("halt_flatten_unconfirmed", {"reason": reason, "reprotected": bool(pos)})
             return
         self.mode = "flat"
         self.entry_price = None
         self.held_qty = 0.0
         self.stop_order_id = None
+        self.entry_coid = None
         self._save()
         self._journal("halt", {"reason": reason})
 
