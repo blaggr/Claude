@@ -126,4 +126,7 @@ def entry_qty(cash: float, price: float, budget_pct: float = None) -> int:
     pct = max(0.0, min(100.0, pct))
     if price <= 0 or cash <= 0:
         return 0
-    return int(math.floor(cash * pct / 100.0 / price))
+    val = cash * pct / 100.0 / price
+    if not math.isfinite(val):       # finite inputs can still overflow to inf
+        return 0
+    return int(math.floor(val))

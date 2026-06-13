@@ -32,18 +32,28 @@ def test_await_fill_full():
     assert b._await_fill("o1", "SPY") == {"filled_qty": 10.0, "fill_price": 9.99}
 
 
-def test_await_fill_partial_through_timeout_returns_partial():
-    # GET always shows partially_filled; on timeout we cancel then re-read and
-    # must surface the 50 shares that DID fill, not None.
-    calls = []
+def test_await_fill_partial_then_cancel_settles_returns_partial():
+    # Partially filled, then on timeout the cancel SETTLES the order to canceled
+    # carrying the 50 filled shares — must surface them, not None.
+    calls = {"deleted": False}
     def api(m, p, body=None):
-        calls.append(m)
         if m == "DELETE":
+            calls["deleted"] = True
             return None
+        if calls["deleted"]:
+            return {"status": "canceled", "filled_qty": "50", "filled_avg_price": "10.00"}
         return {"status": "partially_filled", "filled_qty": "50", "filled_avg_price": "10.00"}
     b = _mk(api)
     assert b._await_fill("o1", "SPY") == {"filled_qty": 50.0, "fill_price": 10.0}
-    assert "DELETE" in calls
+    assert calls["deleted"]
+
+
+def test_await_fill_never_terminal_returns_none_not_midflight():
+    # Order never reaches a terminal status (cancel never settles). Must return
+    # None — NOT a mid-flight partial snapshot of a still-working order.
+    b = _mk(lambda m, p, body=None: None if m == "DELETE" else
+            {"status": "partially_filled", "filled_qty": "50", "filled_avg_price": "10.00"})
+    assert b._await_fill("o1", "SPY") is None
 
 
 def test_await_fill_cancel_fill_race_recovers_fill():
@@ -138,6 +148,27 @@ def test_account_empty_response_raises_brokererror():
     b = _mk(lambda *a, **k: None)
     with pytest.raises(BrokerError):
         b.account()
+
+
+def test_last_price_null_trade_raises_brokererror():
+    # {"trade": null} is a real payload; must raise BrokerError, not AttributeError.
+    b = AlpacaBroker.__new__(AlpacaBroker)
+    b.base = "https://paper-api.alpaca.markets"; b.key = "k"; b.secret = "s"
+    b._req = lambda m, u, body=None: {"trade": None}
+    with pytest.raises(BrokerError):
+        b.last_price("SPY")
+
+
+def test_null_avg_fallback_is_wired_through_await_fill():
+    # A canceled order carrying 5 partial shares with a null avg price must be
+    # rescued using the last-price fallback (not dropped). Uses a REAL _safe_last
+    # so the wiring is actually exercised (the default _mk stubs it to None).
+    b = AlpacaBroker.__new__(AlpacaBroker)
+    b.base = "https://paper-api.alpaca.markets"; b.key = "k"; b.secret = "s"
+    b._api = lambda m, p, body=None: {"status": "canceled", "filled_qty": "5",
+                                      "filled_avg_price": None}
+    b._safe_last = lambda symbol: 10.0
+    assert b._await_fill("o1", "SPY") == {"filled_qty": 5.0, "fill_price": 10.0}
 
 
 if __name__ == "__main__":

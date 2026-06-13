@@ -39,6 +39,7 @@ class FakeBroker:
         self.close_partial = close_partial
         self.reject_dupe_coid = reject_dupe_coid
         self._pos = None
+        self.hide_position = 0          # >0: next N position() reads return None (endpoint lag)
         self.orders = []
         self.coids = []
         self.flatten_calls = 0
@@ -50,6 +51,9 @@ class FakeBroker:
         return {"equity": self.equity, "cash": self.cash, "status": "ACTIVE"}
 
     def position(self, symbol):
+        if self.hide_position > 0:
+            self.hide_position -= 1
+            return None
         return dict(self._pos) if self._pos else None
 
     def last_price(self, symbol):
@@ -192,18 +196,31 @@ def test_reentry_baseline_uses_actual_close_fill(tmp_path):
 
 
 def test_vanished_position_is_reconciled_without_a_phantom_sale(tmp_path):
-    # Position closed externally. reconcile() catches it before the sell path,
-    # so the engine goes flat with NO fabricated SELL fill.
-    b = FakeBroker([100.0, 105.0, 102.0])
+    # Position closed externally. reconcile() catches it (after confirmation)
+    # before the sell path, so the engine goes flat with NO fabricated SELL.
+    b = FakeBroker([100.0, 105.0, 102.0, 102.0])
     t = _trader(b, tmp_path, trail=2)
     t.step(); t.step()                         # long, peak 105
     b._pos = None                              # externally closed
-    t.step()                                   # reconcile flattens; no SELL placed
+    assert t.step() == "wait"                  # 1st empty read: do not act
+    t.step()                                   # 2nd empty read: confirmed flat
     assert t.strat.state == "flat"
     events = [l for l in open(t.journal_file)]
     assert any("reconcile_flat" in l for l in events)
     assert not any('"event": "SELL"' in l for l in events)
     assert b.orders == [("buy", 95, 100.0)]    # only the entry; no close order issued
+
+
+def test_transient_empty_position_does_not_double_buy(tmp_path):
+    # The positions endpoint lags right after a fill. A single empty read while
+    # long must NOT trigger a second all-in BUY on top of the held position.
+    b = FakeBroker([100.0, 100.0, 102.0])
+    t = _trader(b, tmp_path, trail=2, reentry=1)
+    t.step()                                   # buy 95 @100, broker holds 95
+    b.hide_position = 1                         # next read transiently empty (lag)
+    assert t.step() == "wait"                  # must wait, not re-buy
+    assert len([o for o in b.orders if o[0] == "buy"]) == 1
+    assert b.position("SPY")["qty"] == 95      # still the original single position
 
 
 # ---------------------------------------------------------------- reconcile / safety
@@ -223,7 +240,7 @@ def test_adopts_our_own_crash_window_position(tmp_path):
     t = _trader(b, tmp_path, trail=2)
     t.intended_long = True                             # we DID intend this buy
     t.pending_qty = 95.0                               # and the size matches what we ordered
-    assert t.reconcile(110.0) is False
+    assert t.reconcile(110.0) == "ok"
     assert t.strat.state == "long"
     assert t.strat.entry_price == 100.0
 
@@ -234,9 +251,11 @@ def test_reconcile_flat_arms_reentry_from_current_price_not_entry(tmp_path):
     t.strat.state = "long"; t.strat.entry_price = 100.0; t.strat.peak = 130.0
     t.intended_long = True
     b._pos = None
-    t.reconcile(130.0)
+    assert t.reconcile(130.0) == "wait"                # 1st empty read: unconfirmed
+    assert t.reconcile(130.0) == "ok"                  # 2nd: confirmed flat
     assert t.strat.state == "flat"
     assert t.strat.last_exit_price == 130.0            # not the stale entry 100
+    assert t.pending_qty == 0.0                        # cleared on confirmed flat
 
 
 # ---------------------------------------------------------------- interlocks
@@ -288,6 +307,42 @@ def test_dust_entry_is_skipped(tmp_path):
 
 
 # ---------------------------------------------------------------- persistence
+def test_pending_qty_tracks_actual_filled_not_requested(tmp_path):
+    # Partial fill: pending_qty must reflect what the BROKER holds (47), not the
+    # 95 we requested — otherwise a restart reconcile rejects our own position.
+    b = FakeBroker([100.0], fill_ratio=0.5)
+    t = _trader(b, tmp_path, trail=2)
+    t.step()
+    assert t.strat.state == "long"
+    assert t.pending_qty == 47.0                       # floor(95*0.5), the real position
+    assert t._qty_matches(b.position("SPY")["qty"]) is True
+
+
+def test_flatten_unconfirmed_keeps_engine_long(tmp_path):
+    # flatten_all is best-effort; if the position is still held afterwards the
+    # engine must NOT persist flat (which would abandon a stop-less position).
+    b = FakeBroker([100.0])
+    t = _trader(b, tmp_path, trail=2)
+    t.step()                                            # long, broker holds 95
+    b.flatten_all = lambda: None                        # flatten fails silently
+    t._flatten_and_halt("kill")
+    assert t.strat.state == "long"                      # not lied flat
+    assert any("halt_flatten_unconfirmed" in l for l in open(t.journal_file))
+
+
+def test_state_file_with_infinity_is_sanitized(tmp_path):
+    sf = tmp_path / "state.json"
+    sf.write_text('{"strat": {"params": {"trail": 1.0, "reentry": 1.0, '
+                  '"enter_at_start": true}, "state": "flat", "peak": null, '
+                  '"entry_price": null, "last_exit_price": null}, '
+                  '"peak_equity": Infinity, "day_start_equity": Infinity}')
+    b = FakeBroker([100.0])
+    t = AlpacaTrader(b, "SPY", StrategyParams(trail=1), state_file=str(sf),
+                     journal_file=str(tmp_path / "j.jsonl"))
+    assert t.peak_equity is None                        # Infinity rejected on load
+    assert t.day_start_equity is None                   # so the limits cannot be disabled
+
+
 def test_corrupt_state_file_recovers_instead_of_crashing(tmp_path):
     sf = tmp_path / "state.json"
     sf.write_text("{ corrupt json")
@@ -348,7 +403,7 @@ def test_reconcile_rejects_position_of_wrong_size(tmp_path):
     t = _trader(b, tmp_path)
     t.intended_long = True
     t.pending_qty = 95.0                                # we ordered 95, broker has 500
-    assert t.reconcile(100.0) is True                   # halts, not adopted
+    assert t.reconcile(100.0) == "halt"                 # halts, not adopted
     assert t.strat.state == "flat"
 
 

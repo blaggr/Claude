@@ -81,5 +81,12 @@ def test_total_drawdown_limit():
     assert risk.total_drawdown_breached(100_000, float("nan")) is False
 
 
+def test_entry_qty_overflow_returns_zero():
+    # Finite-but-extreme inputs whose ratio overflows to inf must return 0, not
+    # crash with OverflowError in int(floor(inf)).
+    assert risk.entry_qty(1e308, 1e-300) == 0
+    assert risk.entry_qty(1e308, 1e-300, budget_pct=100) == 0
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

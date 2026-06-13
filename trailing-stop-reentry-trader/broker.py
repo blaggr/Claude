@@ -122,7 +122,9 @@ class AlpacaBroker:
 
     def last_price(self, symbol: str) -> float:
         out = self._req("GET", f"{DATA_URL}/v2/stocks/{symbol}/trades/latest?feed=iex")
-        px = self._num((out or {}).get("trade", {}).get("p"))
+        # `{"trade": null}` is a real payload — `.get("trade", {})` would return
+        # None (key present), so guard with `or {}` before the nested .get.
+        px = self._num(((out or {}).get("trade") or {}).get("p"))
         if px is None:
             raise BrokerError(f"no last price for {symbol}: {out}")
         return px
@@ -187,7 +189,6 @@ class AlpacaBroker:
             self._api("DELETE", f"/v2/orders/{order_id}")
         except BrokerError:
             pass
-        o = None
         for _ in range(3):                       # cancel is async — let it settle
             try:
                 o = self._api("GET", f"/v2/orders/{order_id}")
@@ -196,7 +197,9 @@ class AlpacaBroker:
             if o.get("status") in _TERMINAL:
                 return self._fill_from(o, self._safe_last(symbol))
             time.sleep(1)
-        return self._fill_from(o, self._safe_last(symbol)) if o else None
+        # Never reached a terminal status — do NOT return a mid-flight partial
+        # snapshot of a still-working order. The caller reconciles via position().
+        return None
 
     def buy(self, symbol: str, qty: int, *, extended_hours: bool = False,
             limit_price: Optional[float] = None,

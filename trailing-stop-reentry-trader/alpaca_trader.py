@@ -23,11 +23,14 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import signal
 import sys
 import time
 from typing import Optional
+
+FLAT_CONFIRM = 2   # consecutive empty position() reads before declaring an external close
 
 import risk
 from broker import AlpacaBroker, Broker, BrokerError
@@ -60,6 +63,7 @@ class AlpacaTrader:
         self.intended_long = False     # did WE open / intend the current position?
         self.pending_qty = 0.0         # shares we last ordered (to match on reconcile)
         self.order_seq = 0             # for idempotent client_order_ids
+        self.flat_reads = 0            # consecutive empty position() reads while long
         self._load(params)
 
     # --------------------------------------------------------- persistence
@@ -86,10 +90,14 @@ class AlpacaTrader:
 
     @staticmethod
     def _as_float(v) -> Optional[float]:
+        """Parse to a FINITE float, else None. A hand-edited/corrupt state file
+        with Infinity/NaN must not poison the risk limits (a non-finite baseline
+        or peak silently disables daily-loss / drawdown checks)."""
         try:
-            return None if v is None else float(v)
+            f = None if v is None else float(v)
         except (TypeError, ValueError):
             return None
+        return f if (f is not None and math.isfinite(f)) else None
 
     def _qty_matches(self, broker_qty: float) -> bool:
         """Does a broker position's size match what we last ordered? Used before
@@ -109,7 +117,8 @@ class AlpacaTrader:
                        "peak_equity": self.peak_equity,
                        "intended_long": self.intended_long,
                        "pending_qty": self.pending_qty,
-                       "order_seq": self.order_seq}, f, indent=2)
+                       "order_seq": self.order_seq},
+                      f, indent=2, allow_nan=False)   # never persist NaN/Infinity
         os.replace(tmp, self.state_file)
 
     def _journal(self, event: str, fields: dict) -> dict:
@@ -122,43 +131,52 @@ class AlpacaTrader:
         return rec
 
     # --------------------------------------------------------- reconcile
-    def reconcile(self, price: float) -> bool:
-        """Make the engine agree with the broker's truth. Returns True if the
-        trader should HALT this cycle (an unmanaged position is present)."""
+    def reconcile(self, price: float) -> str:
+        """Make the engine agree with the broker's truth. Returns:
+          "ok"   — proceed to run the rule this cycle
+          "halt" — an unmanaged position is present; stop and wait for a human
+          "wait" — broker shows flat but we believe we are long and it is not yet
+                   confirmed (the positions endpoint is eventually-consistent);
+                   skip trading this cycle so we never re-buy on a transient lag.
+        """
         pos = self.broker.position(self.symbol)
         if pos and pos["qty"] > 0:
+            self.flat_reads = 0
             if self.strat.state == "long":
-                # Already tracking our position — keep the higher (true) peak.
                 self.strat.peak = max(self.strat.peak or pos["avg_entry_price"],
                                       pos["avg_entry_price"])
-                return False
+                return "ok"
             if self.intended_long and self._qty_matches(pos["qty"]):
-                # Our buy filled during a crash window before state was saved, and
-                # the size matches what we ordered — adopt it.
                 self.strat.state = "long"
                 self.strat.entry_price = pos["avg_entry_price"]
                 self.strat.peak = max(self.strat.peak or 0.0, pos["avg_entry_price"])
                 self._journal("reconcile_adopt_long",
                               {"qty": pos["qty"], "avg_entry_price": pos["avg_entry_price"]})
-                return False
-            # A position we did NOT open, or whose size does not match what we
-            # ordered. Do not adopt and do not liquidate — refuse to trade until a
-            # human clears it.
+                return "ok"
             self._journal("unmanaged_position_halt",
                           {"qty": pos["qty"], "avg_entry_price": pos["avg_entry_price"],
                            "pending_qty": self.pending_qty})
-            return True
-        # Broker is flat.
+            return "halt"
+        # Broker shows flat.
         if self.strat.state == "long":
-            # Our position vanished (manual/external close). We don't know the real
-            # fill, so arm re-entry off the current price, not the stale entry.
+            # Could be a real external close OR a transient empty read. Require a
+            # few CONSECUTIVE empty reads before abandoning the long, and never
+            # trade on a cycle that saw the position empty — otherwise a lagging
+            # positions endpoint triggers a second all-in BUY on top of the held
+            # position (2x exposure, original shares unmanaged).
+            self.flat_reads += 1
+            if self.flat_reads < FLAT_CONFIRM:
+                self._journal("position_unconfirmed_flat", {"reads": self.flat_reads})
+                return "wait"
             self.strat.last_exit_price = price
             self.strat.state = "flat"
             self.strat.entry_price = None
             self.strat.peak = None
             self.intended_long = False
+            self.pending_qty = 0.0
+            self.flat_reads = 0
             self._journal("reconcile_flat", {"exit_basis": price})
-        return False
+        return "ok"
 
     # --------------------------------------------------------- one cycle
     def step(self) -> str:
@@ -198,9 +216,13 @@ class AlpacaTrader:
             return "halt"
 
         price = self.broker.last_price(self.symbol)
-        if self.reconcile(price):
+        rc = self.reconcile(price)
+        if rc == "halt":
             self._save()
             return "halt"
+        if rc == "wait":
+            self._save()
+            return "wait"      # keep looping, but do not trade this cycle
 
         snapshot = self.strat.to_dict()
         event = self.strat.update(price)
@@ -242,23 +264,20 @@ class AlpacaTrader:
             self.pending_qty = 0.0
             self._journal("buy_rejected", {"error": str(exc)})
             return False
-        if not fill or fill["filled_qty"] < 1:
-            # No fill reported — confirm against broker truth before giving up.
-            pos = self.broker.position(self.symbol)
-            if pos and pos["qty"] > 0:
-                self.strat.entry_price = pos["avg_entry_price"]
-                self.strat.peak = pos["avg_entry_price"]
-                self._journal("BUY", {"qty": pos["qty"], "fill_price": pos["avg_entry_price"],
-                                      "note": "recovered from position"})
-                return True
+        # The BROKER POSITION is the source of truth for whether/how much we hold —
+        # not the fill dict (which can be a mid-flight partial snapshot). Use the
+        # fill only for the price; size pending_qty from the real position.
+        pos = self.broker.position(self.symbol)
+        if not pos or pos["qty"] < 1:
             self.intended_long = False
             self.pending_qty = 0.0
             self._journal("buy_unfilled", {})
             return False
-        # Filled (full OR partial) — anchor the stop to the ACTUAL fill price.
-        self.strat.entry_price = fill["fill_price"]
-        self.strat.peak = fill["fill_price"]
-        self._journal("BUY", {"qty": fill["filled_qty"], "fill_price": fill["fill_price"]})
+        self.strat.entry_price = fill["fill_price"] if fill else pos["avg_entry_price"]
+        self.strat.peak = self.strat.entry_price
+        self.pending_qty = pos["qty"]                # actual filled size (handles partials)
+        self.flat_reads = 0
+        self._journal("BUY", {"qty": pos["qty"], "fill_price": self.strat.entry_price})
         return True
 
     def _do_sell(self, price: float) -> bool:
@@ -287,6 +306,19 @@ class AlpacaTrader:
 
     def _flatten_and_halt(self, reason: str) -> None:
         self.broker.flatten_all()
+        # flatten_all is best-effort (it swallows broker errors). Confirm the
+        # position is actually gone before claiming flat — otherwise we'd persist
+        # a flat state while shares ride with no stop, and a restart would treat
+        # our own abandoned position as "unmanaged".
+        try:
+            pos = self.broker.position(self.symbol)
+        except BrokerError:
+            pos = {"qty": 1.0}        # assume still held if we can't confirm
+        if pos and pos["qty"] > 0:
+            self._save()              # keep state long so a restart re-adopts & retries
+            self._journal("halt_flatten_unconfirmed",
+                          {"reason": reason, "still_holding": pos["qty"]})
+            return
         self.strat.state = "flat"
         self.strat.entry_price = None
         self.strat.peak = None
