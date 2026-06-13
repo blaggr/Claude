@@ -43,6 +43,11 @@ class Broker(Protocol):
             client_order_id: Optional[str] = None) -> Optional[dict]: ...
     def close(self, symbol: str) -> Optional[dict]: ...
     def flatten_all(self) -> None: ...
+    def submit_trailing_stop(self, symbol: str, qty: int, trail_price: float, *,
+                             client_order_id: Optional[str] = None) -> dict: ...
+    def get_order(self, order_id: str) -> Optional[dict]: ...
+    def open_orders(self, symbol: str) -> list: ...
+    def cancel_order(self, order_id: str) -> None: ...
 
 
 def _fmt_price(p: float) -> str:
@@ -224,3 +229,40 @@ class AlpacaBroker:
             self._api("DELETE", "/v2/positions?cancel_orders=true")
         except BrokerError:
             pass
+
+    # ----------------------------------------------------- server-side stop
+    def submit_trailing_stop(self, symbol: str, qty: int, trail_price: float, *,
+                             client_order_id: Optional[str] = None) -> dict:
+        """Place a resting SELL trailing-stop order. The broker tracks the peak
+        and triggers a market sell when price falls ``trail_price`` below it —
+        so the stop survives a client crash / lag / outage. GTC so it persists
+        across sessions until filled or canceled."""
+        if isinstance(qty, bool) or not isinstance(qty, int) or qty < 1:
+            raise BrokerError(f"invalid stop qty {qty!r}: must be a whole int >= 1")
+        if not (isinstance(trail_price, (int, float)) and math.isfinite(trail_price) and trail_price > 0):
+            raise BrokerError(f"invalid trail_price {trail_price!r}")
+        body = {"symbol": symbol, "qty": str(int(qty)), "side": "sell",
+                "type": "trailing_stop", "trail_price": _fmt_price(trail_price),
+                "time_in_force": "gtc"}
+        if client_order_id:
+            body["client_order_id"] = client_order_id[:48]
+        return self._api("POST", "/v2/orders", body)
+
+    def get_order(self, order_id: str) -> Optional[dict]:
+        try:
+            return self._api("GET", f"/v2/orders/{order_id}")
+        except BrokerError as e:
+            if e.code == 404:
+                return None
+            raise
+
+    def open_orders(self, symbol: str) -> list:
+        """Open (working) orders for the symbol — used to confirm a resting stop."""
+        return self._api("GET", f"/v2/orders?status=open&symbols={symbol}") or []
+
+    def cancel_order(self, order_id: str) -> None:
+        try:
+            self._api("DELETE", f"/v2/orders/{order_id}")
+        except BrokerError as e:
+            if e.code not in (404, 422):    # already gone / not cancelable
+                raise

@@ -39,16 +39,21 @@ enable it.
 
 ## How it maps the rule to orders
 
-The strategy is all-in / all-out in one symbol:
+The strategy is all-in / all-out in one symbol, and **the stop lives at the
+broker**:
 
-| Engine event | Order |
+| Step | Order |
 |---|---|
-| BUY  | market buy a whole-share slice of **cash** (`BUDGET_PCT`, default 95%, never margin) |
-| SELL | close the entire position |
+| Entry | market buy a whole-share slice of **cash** (`BUDGET_PCT`, default 95%, never margin), then immediately attach a resting **server-side trailing-stop sell** (`type=trailing_stop`, `trail_price=$trail`, GTC) |
+| Exit  | the **broker** fires the trailing stop when price falls `$trail` below its peak — no client action needed |
+| Re-entry | when flat, the client buys again once price rises `$reentry` above the last exit, and attaches a fresh stop |
 
-Entries fire only while the regular market session is open (regular-hours
-market orders). After each fill the engine is re-anchored to the **actual fill
-price**, so the trailing stop tracks reality, not the polled price.
+Why server-side: the exit no longer depends on this process being alive and
+winning a race. If the worker crashes, lags, or the network drops, the
+protective stop is still resting at Alpaca. If the stop can't be attached after
+a buy, the trader **flattens immediately** rather than hold a naked position. A
+lagging position read only delays re-entry; it can't cause a double-buy (entries
+are gated on the broker showing truly flat) or abandon a position.
 
 ## Risk controls (`risk.py`)
 
