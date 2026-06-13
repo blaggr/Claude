@@ -241,9 +241,13 @@ def run_backtest(
     c = df["close"].to_numpy(dtype=float)
 
     # Arm the re-entry trigger at the first price when we are not entering at
-    # the start, so the "wait for the first trigger" mode can ever fire.
+    # the start, so the "wait for the first trigger" mode can ever fire. Bar 0
+    # is an ARMING-ONLY bar (no entry), mirroring StreamingStrategy consuming
+    # its first tick to arm — this is what makes the close-only backtest agree
+    # with the live engine trade-for-trade in this mode too. Arm off the close
+    # for close-only (the value the streaming engine would receive).
     if not params.enter_at_start:
-        last_exit_price = float(o[0])
+        last_exit_price = float(c[0] if not params.use_intrabar else o[0])
 
     for i in range(len(df)):
         t = index[i]
@@ -251,10 +255,11 @@ def run_backtest(
         if state == "flat":
             do_enter = False
             fill = math.nan
+            arming_bar = (not params.enter_at_start) and i == 0
             if last_exit_price is None:
                 if params.enter_at_start:
                     do_enter, fill = True, o[i]
-            else:
+            elif not arming_bar:
                 trigger = last_exit_price + params.reentry
                 if params.use_intrabar:
                     if h[i] >= trigger:
@@ -396,6 +401,13 @@ class StreamingStrategy:
         obj.peak = d.get("peak")
         obj.entry_price = d.get("entry_price")
         obj.last_exit_price = d.get("last_exit_price")
+        # Repair an inconsistent persisted/edited state rather than trusting it:
+        # a long with no peak would crash the long branch (under `python -O` the
+        # assert is stripped). Fall back to the entry price, or drop to flat.
+        if obj.state == "long" and obj.peak is None:
+            obj.peak = obj.entry_price
+            if obj.peak is None:
+                obj.state = "flat"
         return obj
 
     @property

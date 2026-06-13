@@ -9,12 +9,14 @@ positions against the broker. Live trading is locked behind the interlocks in
     export ALPACA_KEY_ID=PK...  ALPACA_SECRET_KEY=...
     python alpaca_trader.py --symbol SPY --trail 1.5 --reentry 1 --poll 60
 
-The strategy is all-in / all-out in a single symbol:
-  * BUY event  -> market buy a whole-share slice of cash (risk.entry_qty)
-  * SELL event -> close the entire position
-Entries fire only while the market is open (regular-hours market orders). State
-is journaled to JSONL and persisted so a restart reconciles against Alpaca
-rather than double-ordering.
+Safety design after review:
+  * The engine NEVER commits state the broker didn't confirm. Each cycle snapshots
+    the strategy, runs the rule, and rolls back if the resulting order does not
+    leave us in the position the engine assumed (failed/partial/unconfirmed).
+  * It only manages a position it OPENED. A position it did not open (manual, or
+    a different process) halts entries instead of being adopted or liquidated.
+  * The daily-loss baseline is carried across the session rollover (prior close),
+    so an overnight gap counts against the limit.
 """
 from __future__ import annotations
 
@@ -48,21 +50,42 @@ class AlpacaTrader:
         self.symbol = symbol.upper()
         self.state_file = state_file
         self.journal_file = journal_file
-        self.strat, self.day_start_equity, self.day = self._load(params)
+        # Safe defaults FIRST, so _journal (which reads self.strat) works even if
+        # loading a corrupt state file fails inside _load.
+        self.strat = StreamingStrategy(params)
+        self.day_start_equity: Optional[float] = None
+        self.day: Optional[str] = None
+        self.last_equity: Optional[float] = None
+        self.intended_long = False     # did WE open / intend the current position?
+        self.order_seq = 0             # for idempotent client_order_ids
+        self._load(params)
 
     # --------------------------------------------------------- persistence
-    def _load(self, params: StrategyParams):
-        if self.state_file and os.path.exists(self.state_file):
-            try:
-                with open(self.state_file) as f:
-                    d = json.load(f)
-                strat = StreamingStrategy.from_dict(d["strat"])
-                if strat.state == "flat":   # only adopt fresh params when flat
-                    strat.params = params
-                return strat, d.get("day_start_equity"), d.get("day")
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                self._journal("state_load_failed", {"error": str(exc)})
-        return StreamingStrategy(params), None, None
+    def _load(self, params: StrategyParams) -> None:
+        if not (self.state_file and os.path.exists(self.state_file)):
+            return
+        try:
+            with open(self.state_file) as f:
+                d = json.load(f)
+            strat = StreamingStrategy.from_dict(d["strat"])
+            if strat.state == "flat":           # only adopt fresh params when flat
+                strat.params = params
+            self.strat = strat
+            self.day = d.get("day")
+            self.intended_long = bool(d.get("intended_long", False))
+            self.order_seq = int(d.get("order_seq", 0) or 0)
+            self.day_start_equity = self._as_float(d.get("day_start_equity"))
+            self.last_equity = self._as_float(d.get("last_equity"))
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            # self.strat is the safe default assigned in __init__, so this is safe.
+            self._journal("state_load_failed", {"error": str(exc)})
+
+    @staticmethod
+    def _as_float(v) -> Optional[float]:
+        try:
+            return None if v is None else float(v)
+        except (TypeError, ValueError):
+            return None
 
     def _save(self) -> None:
         if not self.state_file:
@@ -71,35 +94,55 @@ class AlpacaTrader:
         with open(tmp, "w") as f:
             json.dump({"strat": self.strat.to_dict(),
                        "day_start_equity": self.day_start_equity,
-                       "day": self.day}, f, indent=2)
+                       "day": self.day, "last_equity": self.last_equity,
+                       "intended_long": self.intended_long,
+                       "order_seq": self.order_seq}, f, indent=2)
         os.replace(tmp, self.state_file)
 
-    def _journal(self, event: str, fields: dict) -> None:
+    def _journal(self, event: str, fields: dict) -> dict:
         rec = {"ts": dt.datetime.now().isoformat(timespec="seconds"),
                "symbol": self.symbol, "event": event,
-               "state": self.strat.state, **fields}
+               "state": getattr(self, "strat", None) and self.strat.state, **fields}
         if self.journal_file:
             with open(self.journal_file, "a") as f:
                 f.write(json.dumps(rec) + "\n")
         return rec
 
     # --------------------------------------------------------- reconcile
-    def reconcile(self) -> None:
-        """Make the engine agree with the broker's truth about the position."""
+    def reconcile(self, price: float) -> bool:
+        """Make the engine agree with the broker's truth. Returns True if the
+        trader should HALT this cycle (an unmanaged position is present)."""
         pos = self.broker.position(self.symbol)
-        if pos and pos["qty"] > 0 and self.strat.state == "flat":
-            self.strat.state = "long"
-            self.strat.entry_price = pos["avg_entry_price"]
-            self.strat.peak = max(self.strat.peak or 0.0, pos["avg_entry_price"])
-            self._journal("reconcile_adopt_long",
+        if pos and pos["qty"] > 0:
+            if self.strat.state == "long":
+                # Already tracking our position — keep the higher (true) peak.
+                self.strat.peak = max(self.strat.peak or pos["avg_entry_price"],
+                                      pos["avg_entry_price"])
+                return False
+            if self.intended_long:
+                # Our buy filled during a crash window before state was saved.
+                self.strat.state = "long"
+                self.strat.entry_price = pos["avg_entry_price"]
+                self.strat.peak = max(self.strat.peak or 0.0, pos["avg_entry_price"])
+                self._journal("reconcile_adopt_long",
+                              {"qty": pos["qty"], "avg_entry_price": pos["avg_entry_price"]})
+                return False
+            # A position we did NOT open (manual / another process). Do not adopt
+            # it and do not liquidate it — refuse to trade until a human clears it.
+            self._journal("unmanaged_position_halt",
                           {"qty": pos["qty"], "avg_entry_price": pos["avg_entry_price"]})
-        elif (not pos or pos["qty"] == 0) and self.strat.state == "long":
-            # Position vanished underneath us (manual close, prior fill, etc.).
-            self.strat.last_exit_price = self.strat.entry_price
+            return True
+        # Broker is flat.
+        if self.strat.state == "long":
+            # Our position vanished (manual/external close). We don't know the real
+            # fill, so arm re-entry off the current price, not the stale entry.
+            self.strat.last_exit_price = price
             self.strat.state = "flat"
             self.strat.entry_price = None
             self.strat.peak = None
-            self._journal("reconcile_flat", {})
+            self.intended_long = False
+            self._journal("reconcile_flat", {"exit_basis": price})
+        return False
 
     # --------------------------------------------------------- one cycle
     def step(self) -> str:
@@ -109,15 +152,19 @@ class AlpacaTrader:
 
         clock = self.broker.clock()
         today = str(clock.get("timestamp", ""))[:10]
-        if today and today != self.day:           # new session -> reset loss baseline
+        if today and today != self.day:
+            # New session: carry the prior session's last equity as the loss
+            # baseline so an overnight gap counts against the daily limit.
             self.day = today
-            self.day_start_equity = None
+            self.day_start_equity = self.last_equity
 
         if not clock.get("is_open"):
+            self._save()                       # persist the rollover even when closed
             self._journal("market_closed", {})
             return "closed"
 
         acct = self.broker.account()
+        self.last_equity = acct["equity"]
         if self.day_start_equity is None:
             self.day_start_equity = acct["equity"]
         if risk.daily_loss_breached(self.day_start_equity, acct["equity"]):
@@ -127,14 +174,19 @@ class AlpacaTrader:
             self._flatten_and_halt("daily loss limit breached")
             return "halt"
 
-        self.reconcile()
-
         price = self.broker.last_price(self.symbol)
+        if self.reconcile(price):
+            self._save()
+            return "halt"
+
+        snapshot = self.strat.to_dict()
         event = self.strat.update(price)
         if event and event["action"] == "BUY":
-            self._do_buy(price, acct)
+            if not self._do_buy(price):
+                self.strat = StreamingStrategy.from_dict(snapshot)   # not confirmed -> roll back
         elif event and event["action"] == "SELL":
-            self._do_sell(price)
+            if not self._do_sell(price):
+                self.strat = StreamingStrategy.from_dict(snapshot)   # close failed/partial -> stay long
         else:
             ref = (self.strat.stop_level if self.strat.state == "long"
                    else self.strat.reentry_trigger)
@@ -144,48 +196,72 @@ class AlpacaTrader:
         return "ok"
 
     # --------------------------------------------------------- order paths
-    def _do_buy(self, price: float, acct: dict) -> None:
+    def _do_buy(self, price: float) -> bool:
+        """Returns True only if we genuinely hold a position afterwards."""
+        acct = self.broker.account()                 # fresh cash after reconcile/waits
         qty = risk.entry_qty(acct["cash"], price)
         if qty < 1:
-            self._abort_entry("insufficient cash for one share",
-                              {"cash": acct["cash"], "price": price})
-            return
+            self._journal("skip_buy", {"reason": "insufficient cash for one share",
+                                       "cash": acct["cash"], "price": price})
+            return False
+        self.intended_long = True
+        self._save()        # persist INTENT before the order, so a crash mid-buy is recoverable
+        coid = f"{self.symbol}-{self.order_seq}-buy"
         try:
-            fill = self.broker.buy(self.symbol, qty)
+            fill = self.broker.buy(self.symbol, qty, client_order_id=coid)
         except BrokerError as exc:
-            self._abort_entry("buy rejected", {"error": str(exc)})
-            return
+            self.intended_long = False
+            self._journal("buy_rejected", {"error": str(exc)})
+            return False
         if not fill or fill["filled_qty"] < 1:
-            self._abort_entry("buy not filled", {})
-            return
-        # Anchor the engine to the ACTUAL fill so the stop tracks reality.
+            # No fill reported — confirm against broker truth before giving up.
+            pos = self.broker.position(self.symbol)
+            if pos and pos["qty"] > 0:
+                self.strat.entry_price = pos["avg_entry_price"]
+                self.strat.peak = pos["avg_entry_price"]
+                self.order_seq += 1
+                self._journal("BUY", {"qty": pos["qty"], "fill_price": pos["avg_entry_price"],
+                                      "note": "recovered from position"})
+                return True
+            self.intended_long = False
+            self._journal("buy_unfilled", {})
+            return False
+        # Filled (full OR partial) — anchor the stop to the ACTUAL fill price.
         self.strat.entry_price = fill["fill_price"]
         self.strat.peak = fill["fill_price"]
+        self.order_seq += 1
         self._journal("BUY", {"qty": fill["filled_qty"], "fill_price": fill["fill_price"]})
+        return True
 
-    def _do_sell(self, price: float) -> None:
+    def _do_sell(self, price: float) -> bool:
+        """Returns True only if the broker is CONFIRMED flat afterwards."""
         try:
             fill = self.broker.close(self.symbol)
         except BrokerError as exc:
-            # Couldn't close — re-sync to broker truth next loop; do not lie.
             self._journal("sell_failed", {"error": str(exc)})
-            return
-        exit_px = fill["fill_price"] if fill else price
-        self.strat.last_exit_price = exit_px
-        self._journal("SELL", {"fill_price": exit_px})
-
-    def _abort_entry(self, reason: str, fields: dict) -> None:
-        # We did not actually take the position the engine just opened — revert.
-        self.strat.state = "flat"
-        self.strat.entry_price = None
-        self.strat.peak = None
-        self._journal("skip_buy", {"reason": reason, **fields})
+            return False                              # stay long, retry next loop
+        pos = self.broker.position(self.symbol)
+        if pos and pos["qty"] > 0:
+            self._journal("partial_close", {"remaining": pos["qty"]})
+            return False                              # still holding -> stay long, retry
+        if fill is None:
+            # Nothing was held — position already gone. Arm re-entry off current price.
+            self.strat.last_exit_price = price
+            self.intended_long = False
+            self._journal("sell_no_position", {"exit_basis": price})
+            return True
+        self.strat.last_exit_price = fill["fill_price"]
+        self.intended_long = False
+        self.order_seq += 1
+        self._journal("SELL", {"fill_price": fill["fill_price"]})
+        return True
 
     def _flatten_and_halt(self, reason: str) -> None:
         self.broker.flatten_all()
         self.strat.state = "flat"
         self.strat.entry_price = None
         self.strat.peak = None
+        self.intended_long = False
         self._save()
         self._journal("halt", {"reason": reason})
 
@@ -245,7 +321,8 @@ def main(argv=None) -> int:
     base_url, mode = risk.resolve_mode()
     broker = AlpacaBroker(base_url,
                           os.environ.get("ALPACA_KEY_ID", ""),
-                          os.environ.get("ALPACA_SECRET_KEY", ""))
+                          os.environ.get("ALPACA_SECRET_KEY", ""),
+                          allow_live=(mode == "LIVE"))
 
     if args.check:
         acct = broker.account()
