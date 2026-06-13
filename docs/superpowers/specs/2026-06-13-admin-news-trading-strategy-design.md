@@ -64,31 +64,41 @@ interface:
 
 ## 4. Signal (Phase 1: A + B)
 
-- **A — surprise (core).** At release, `z = (actual − consensus) / σ`, where σ is
-  the historical surprise standard deviation. If `|z| ≥ threshold`, trade the
-  mapped direction; size scales with `|z|`, capped. Direction map per release
-  type (e.g. hot CPI → short rate-sensitive instrument).
-- **B — drift (baseline).** Ignore consensus; measure the first *k*-minute
-  reaction after the release and enter in its direction.
+- **B — drift (the backtestable CORE).** Ignore consensus; measure the first
+  *k*-minute reaction after the release and enter in its direction. Needs **no
+  consensus data** — only free vintage actuals + price bars — so it can be
+  validated rigorously and for free. **This is the signal the §7 gate is run on.**
+- **A — surprise (a forward-only OVERLAY).** At release, `z = (actual −
+  consensus) / σ`. If `|z| ≥ threshold`, trade the mapped direction; size scales
+  with `|z|`, capped. **Consensus is NOT bought and NOT backtested from AI** (see
+  §5): there is no clean free *historical* point-in-time consensus, so A is
+  **validated forward by paper trading**, not by a backtest, using AI-extracted +
+  source-verified *live* consensus. *(Optional future enhancement: scrape a free
+  historical-consensus archive — ForexFactory/Investing.com — to make A
+  backtestable; flagged patchy/ToS-gray, not relied on.)*
 - **Exit (both):** fixed horizon (e.g. session close or N hours) **or** a
   trailing stop, whichever first. Parameters (`threshold`, `Δ`, `k`, horizon,
   trail) are swept and chosen **only on the training window**, then evaluated
   out-of-sample.
-- Backtest runs **A, B, and buy-and-hold side by side** so we can see whether the
-  consensus signal actually earns its data dependency.
+- Backtest runs **B and buy-and-hold side by side**; A is layered on later in the
+  forward/paper stage and measured for marginal contribution there.
 
 ## 5. Data (and the landmines)
 
+**No paid econ-calendar feed.** Sourcing decisions:
+
 | Need | Source | Catch / mitigation |
 |---|---|---|
-| Release **actuals** | FRED / ALFRED | Must use **first-print / vintage** values (ALFRED), not FRED's revised series, or the backtest has look-ahead and is worthless. |
-| **Consensus** forecast | Paid econ-calendar API (Trading Economics / Econoday) or scraped (Investing.com / ForexFactory) | Must be **point-in-time** (as known just before release). Assembling clean historical consensus is the biggest data risk; budget for a paid feed. |
-| Release **timestamps** | BLS / Fed schedules | Datetime to the minute, including reschedules. |
-| **Price bars** | Alpaca historical (IEX/SIP) or Polygon | Intraday lookback depth + feed cost; may need a paid bars feed for a long enough window. |
+| Release **actuals** | FRED / ALFRED (free) | Must use **first-print / vintage** values (ALFRED), not FRED's revised series, or the backtest has look-ahead and is worthless. |
+| Release **schedule + timestamps** | Official **BLS / Fed** calendars (free, structured) | Deterministic public tables. **No AI here** — an LLM would only add hallucination risk to clean data. |
+| **Historical consensus** (for backtesting A) | *None used.* | There is no clean, free, point-in-time historical consensus. **An LLM must NOT supply it** — it would hallucinate revised/leaked numbers = look-ahead that silently poisons the backtest. Therefore A is **not backtested** (see §4). *(Optional: a scraped archive could make A backtestable later — patchy, ToS-gray, not trusted by default.)* |
+| **Live consensus** (for forward/paper trading A) | **LLM (ChatGPT/Claude) + web search**, with mandatory **source citation + cross-check** | Legitimate because it reads *contemporaneous* public reporting (not look-ahead). A bare, uncited LLM guess is rejected. |
+| **Price bars** | Alpaca historical (IEX/SIP) or Polygon | Intraday lookback depth + feed cost; may need a paid bars feed for a long enough window (open item). |
 
-**Invariant:** a missing/low-quality data source **fails loudly** — never silently
+**Invariants:** a missing/low-quality data source **fails loudly** — never silently
 fabricates. Every event records its data provenance. The signal sees **only data
-known at `event_ts`** (no look-ahead, ever).
+known at `event_ts`** (no look-ahead, ever). **AI is never used to reconstruct
+historical data** — only to read genuinely-current information forward.
 
 ## 6. Cost model & backtest
 
@@ -150,7 +160,10 @@ known at `event_ts`** (no look-ahead, ever).
 
 ## 11. Open items to resolve during implementation
 
-- Pick the consensus-data vendor (cost, history depth, licensing).
+- Obtain an **LLM API key** (ChatGPT or Claude) — for forward live-consensus
+  extraction (signal A) and Phase-2 post classification. **Not** for backtest data.
 - Pick the price-bar vendor and confirm intraday history reaches a usable window.
-- Set the concrete gate thresholds (Sharpe bar, max-DD limit, min `n`).
+- Set the concrete gate thresholds (Sharpe bar ≈ 0.8, max-DD limit, min `n`).
 - Confirm ALFRED vintage coverage for each chosen release series.
+- Decide later whether to attempt a free scraped historical-consensus archive to
+  make signal A backtestable (optional; patchy/ToS-gray, verify before trusting).
