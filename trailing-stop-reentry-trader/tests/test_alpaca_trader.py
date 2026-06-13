@@ -25,7 +25,7 @@ class FakeBroker:
     def __init__(self, prices, *, is_open=True, equity=10_000.0, cash=10_000.0,
                  timestamp="2024-03-01T10:00:00-05:00",
                  slippage=0.0, fill_ratio=1.0, reject_buy=False,
-                 close_raises=False, close_partial=False):
+                 close_raises=False, close_partial=False, reject_dupe_coid=False):
         self._prices = deque(prices)
         self._last = prices[0] if prices else 0.0
         self.is_open = is_open
@@ -37,8 +37,10 @@ class FakeBroker:
         self.reject_buy = reject_buy
         self.close_raises = close_raises
         self.close_partial = close_partial
+        self.reject_dupe_coid = reject_dupe_coid
         self._pos = None
         self.orders = []
+        self.coids = []
         self.flatten_calls = 0
 
     def clock(self):
@@ -56,6 +58,10 @@ class FakeBroker:
         return self._last
 
     def buy(self, symbol, qty, *, extended_hours=False, limit_price=None, client_order_id=None):
+        if client_order_id is not None:
+            if self.reject_dupe_coid and client_order_id in self.coids:
+                raise BrokerError("client_order_id must be unique", code=422)
+            self.coids.append(client_order_id)   # order is submitted regardless of fill
         if self.reject_buy:
             raise BrokerError("buy rejected: insufficient buying power", code=403)
         filled = int(qty * self.fill_ratio)
@@ -216,6 +222,7 @@ def test_adopts_our_own_crash_window_position(tmp_path):
     b._pos = {"qty": 95.0, "avg_entry_price": 100.0}
     t = _trader(b, tmp_path, trail=2)
     t.intended_long = True                             # we DID intend this buy
+    t.pending_qty = 95.0                               # and the size matches what we ordered
     assert t.reconcile(110.0) is False
     assert t.strat.state == "long"
     assert t.strat.entry_price == 100.0
@@ -299,6 +306,50 @@ def test_restart_does_not_double_buy(tmp_path):
     t2 = _trader(b, tmp_path)                            # reload state, broker still holds
     t2.step()
     assert len([o for o in b.orders if o[0] == "buy"]) == 1
+
+
+def test_unfilled_buy_uses_a_fresh_client_order_id(tmp_path):
+    # An order that submits but does not fill must NOT reuse its client_order_id
+    # next cycle (Alpaca 422s a reused id -> wedged flat forever).
+    b = FakeBroker([100.0, 100.0], fill_ratio=0.0, reject_dupe_coid=True)
+    t = _trader(b, tmp_path)
+    t.step()                                            # submits SPY-0-buy, unfilled
+    t.step()                                            # must submit a FRESH coid
+    assert b.coids == ["SPY-0-buy", "SPY-1-buy"]
+    assert t.strat.state == "flat"
+
+
+def test_total_drawdown_limit_halts_on_slow_bleed(tmp_path):
+    # ~4%/day for several days: each day is UNDER the 5% daily limit (which
+    # re-anchors to the prior close), but cumulative drawdown from the 10000 peak
+    # reaches 15% — only the total-drawdown limit catches this.
+    b = FakeBroker([100.0] * 8)
+    t = _trader(b, tmp_path)
+    eqs = [10_000, 9_600, 9_220, 8_850, 8_500]
+    days = ["2024-03-01", "2024-03-04", "2024-03-05", "2024-03-06", "2024-03-07"]
+    result = None
+    for eq, day in zip(eqs, days):
+        b.equity = float(eq)
+        b.timestamp = f"{day}T10:00:00-05:00"
+        result = t.step()
+        if result == "halt":
+            break
+    assert result == "halt"
+    assert b.flatten_calls == 1
+    assert risk.kill_switch_active()
+    assert any("total drawdown" in l for l in open(t.journal_file))   # not the daily limit
+
+
+def test_reconcile_rejects_position_of_wrong_size(tmp_path):
+    # intended_long True but the broker holds a size we never ordered -> halt,
+    # do not adopt (guards a torn/edited state file).
+    b = FakeBroker([100.0])
+    b._pos = {"qty": 500.0, "avg_entry_price": 50.0}
+    t = _trader(b, tmp_path)
+    t.intended_long = True
+    t.pending_qty = 95.0                                # we ordered 95, broker has 500
+    assert t.reconcile(100.0) is True                   # halts, not adopted
+    assert t.strat.state == "flat"
 
 
 if __name__ == "__main__":

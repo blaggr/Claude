@@ -56,7 +56,9 @@ class AlpacaTrader:
         self.day_start_equity: Optional[float] = None
         self.day: Optional[str] = None
         self.last_equity: Optional[float] = None
+        self.peak_equity: Optional[float] = None   # high-water mark for the drawdown limit
         self.intended_long = False     # did WE open / intend the current position?
+        self.pending_qty = 0.0         # shares we last ordered (to match on reconcile)
         self.order_seq = 0             # for idempotent client_order_ids
         self._load(params)
 
@@ -74,8 +76,10 @@ class AlpacaTrader:
             self.day = d.get("day")
             self.intended_long = bool(d.get("intended_long", False))
             self.order_seq = int(d.get("order_seq", 0) or 0)
+            self.pending_qty = self._as_float(d.get("pending_qty")) or 0.0
             self.day_start_equity = self._as_float(d.get("day_start_equity"))
             self.last_equity = self._as_float(d.get("last_equity"))
+            self.peak_equity = self._as_float(d.get("peak_equity"))
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             # self.strat is the safe default assigned in __init__, so this is safe.
             self._journal("state_load_failed", {"error": str(exc)})
@@ -87,6 +91,13 @@ class AlpacaTrader:
         except (TypeError, ValueError):
             return None
 
+    def _qty_matches(self, broker_qty: float) -> bool:
+        """Does a broker position's size match what we last ordered? Used before
+        adopting a crash-window position so we never adopt an unrelated holding."""
+        if not self.pending_qty:
+            return False
+        return abs(broker_qty - self.pending_qty) <= max(1.0, 0.05 * self.pending_qty)
+
     def _save(self) -> None:
         if not self.state_file:
             return
@@ -95,7 +106,9 @@ class AlpacaTrader:
             json.dump({"strat": self.strat.to_dict(),
                        "day_start_equity": self.day_start_equity,
                        "day": self.day, "last_equity": self.last_equity,
+                       "peak_equity": self.peak_equity,
                        "intended_long": self.intended_long,
+                       "pending_qty": self.pending_qty,
                        "order_seq": self.order_seq}, f, indent=2)
         os.replace(tmp, self.state_file)
 
@@ -119,18 +132,21 @@ class AlpacaTrader:
                 self.strat.peak = max(self.strat.peak or pos["avg_entry_price"],
                                       pos["avg_entry_price"])
                 return False
-            if self.intended_long:
-                # Our buy filled during a crash window before state was saved.
+            if self.intended_long and self._qty_matches(pos["qty"]):
+                # Our buy filled during a crash window before state was saved, and
+                # the size matches what we ordered — adopt it.
                 self.strat.state = "long"
                 self.strat.entry_price = pos["avg_entry_price"]
                 self.strat.peak = max(self.strat.peak or 0.0, pos["avg_entry_price"])
                 self._journal("reconcile_adopt_long",
                               {"qty": pos["qty"], "avg_entry_price": pos["avg_entry_price"]})
                 return False
-            # A position we did NOT open (manual / another process). Do not adopt
-            # it and do not liquidate it — refuse to trade until a human clears it.
+            # A position we did NOT open, or whose size does not match what we
+            # ordered. Do not adopt and do not liquidate — refuse to trade until a
+            # human clears it.
             self._journal("unmanaged_position_halt",
-                          {"qty": pos["qty"], "avg_entry_price": pos["avg_entry_price"]})
+                          {"qty": pos["qty"], "avg_entry_price": pos["avg_entry_price"],
+                           "pending_qty": self.pending_qty})
             return True
         # Broker is flat.
         if self.strat.state == "long":
@@ -165,6 +181,7 @@ class AlpacaTrader:
 
         acct = self.broker.account()
         self.last_equity = acct["equity"]
+        self.peak_equity = max(self.peak_equity or acct["equity"], acct["equity"])
         if self.day_start_equity is None:
             self.day_start_equity = acct["equity"]
         if risk.daily_loss_breached(self.day_start_equity, acct["equity"]):
@@ -172,6 +189,12 @@ class AlpacaTrader:
                 f"daily loss limit: equity {acct['equity']:.2f} "
                 f"vs day start {self.day_start_equity:.2f}")
             self._flatten_and_halt("daily loss limit breached")
+            return "halt"
+        if risk.total_drawdown_breached(self.peak_equity, acct["equity"]):
+            risk.trip_kill_switch(
+                f"total drawdown limit: equity {acct['equity']:.2f} "
+                f"vs peak {self.peak_equity:.2f}")
+            self._flatten_and_halt("total drawdown limit breached")
             return "halt"
 
         price = self.broker.last_price(self.symbol)
@@ -204,13 +227,19 @@ class AlpacaTrader:
             self._journal("skip_buy", {"reason": "insufficient cash for one share",
                                        "cash": acct["cash"], "price": price})
             return False
-        self.intended_long = True
-        self._save()        # persist INTENT before the order, so a crash mid-buy is recoverable
+        # Consume a fresh client_order_id PER SUBMISSION (incremented and persisted
+        # before the order). Reusing a coid after an unfilled order is rejected by
+        # Alpaca with a 422, which would wedge re-entry forever.
         coid = f"{self.symbol}-{self.order_seq}-buy"
+        self.order_seq += 1
+        self.intended_long = True
+        self.pending_qty = float(qty)
+        self._save()        # persist consumed seq + intent before the order
         try:
             fill = self.broker.buy(self.symbol, qty, client_order_id=coid)
         except BrokerError as exc:
             self.intended_long = False
+            self.pending_qty = 0.0
             self._journal("buy_rejected", {"error": str(exc)})
             return False
         if not fill or fill["filled_qty"] < 1:
@@ -219,17 +248,16 @@ class AlpacaTrader:
             if pos and pos["qty"] > 0:
                 self.strat.entry_price = pos["avg_entry_price"]
                 self.strat.peak = pos["avg_entry_price"]
-                self.order_seq += 1
                 self._journal("BUY", {"qty": pos["qty"], "fill_price": pos["avg_entry_price"],
                                       "note": "recovered from position"})
                 return True
             self.intended_long = False
+            self.pending_qty = 0.0
             self._journal("buy_unfilled", {})
             return False
         # Filled (full OR partial) — anchor the stop to the ACTUAL fill price.
         self.strat.entry_price = fill["fill_price"]
         self.strat.peak = fill["fill_price"]
-        self.order_seq += 1
         self._journal("BUY", {"qty": fill["filled_qty"], "fill_price": fill["fill_price"]})
         return True
 
@@ -248,11 +276,12 @@ class AlpacaTrader:
             # Nothing was held — position already gone. Arm re-entry off current price.
             self.strat.last_exit_price = price
             self.intended_long = False
+            self.pending_qty = 0.0
             self._journal("sell_no_position", {"exit_basis": price})
             return True
         self.strat.last_exit_price = fill["fill_price"]
         self.intended_long = False
-        self.order_seq += 1
+        self.pending_qty = 0.0
         self._journal("SELL", {"fill_price": fill["fill_price"]})
         return True
 
@@ -262,6 +291,7 @@ class AlpacaTrader:
         self.strat.entry_price = None
         self.strat.peak = None
         self.intended_long = False
+        self.pending_qty = 0.0
         self._save()
         self._journal("halt", {"reason": reason})
 

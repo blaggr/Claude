@@ -56,5 +56,30 @@ def test_env_parse_does_not_crash_import(monkeypatch):
     importlib.reload(risk)
 
 
+def test_nan_env_falls_back_to_default(monkeypatch):
+    # 'nan'/'inf' parse as floats but must NOT be accepted — they would silently
+    # disable the loss limit (eq <= nan is always False).
+    monkeypatch.setenv("MAX_DAILY_LOSS_PCT", "nan")
+    importlib.reload(risk)
+    assert risk.MAX_DAILY_LOSS_PCT == 5.0
+    assert risk.daily_loss_breached(100_000, 50_000) is True   # limit still works
+    monkeypatch.delenv("MAX_DAILY_LOSS_PCT", raising=False)
+    importlib.reload(risk)
+
+
+def test_nan_inputs_do_not_disable_limits_or_oversize():
+    assert risk.daily_loss_breached(100_000, float("nan")) is False
+    assert risk.daily_loss_breached(float("nan"), 50_000) is False
+    assert risk.entry_qty(100_000, 100, float("nan")) == 0     # NOT clamped to 100%
+    assert risk.entry_qty(float("nan"), 100) == 0              # no crash
+
+
+def test_total_drawdown_limit():
+    assert risk.total_drawdown_breached(100_000, 84_000) is True    # -16% > 15%
+    assert risk.total_drawdown_breached(100_000, 90_000) is False   # -10%
+    assert risk.total_drawdown_breached(0, 0) is False
+    assert risk.total_drawdown_breached(100_000, float("nan")) is False
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

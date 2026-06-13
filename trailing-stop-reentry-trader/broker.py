@@ -7,19 +7,22 @@ last price / buy / sell-to-flat / flatten), so it can be driven by the live
 ``AlpacaBroker`` is a stdlib-only REST client (no SDK) adapted from
 ``experiments/live/alpaca.py`` so this package stays self-contained — every
 request is plain and auditable. Paper and live share the same API; the base URL
-is chosen by :mod:`risk`. As defence in depth the live endpoint is refused here
+is chosen by :mod:`risk`. As defence in depth the live host is refused here
 unless ``allow_live=True`` is passed explicitly.
 """
 from __future__ import annotations
 
 import json
+import math
 import time
 import urllib.error
 import urllib.request
 from typing import Optional, Protocol
+from urllib.parse import urlparse
 
 DATA_URL = "https://data.alpaca.markets"
-_LIVE_HOST = "api.alpaca.markets"   # NB: paper host is "paper-api.alpaca.markets"
+_LIVE_HOST = "api.alpaca.markets"          # the real-money host (paper is paper-api.alpaca.markets)
+_TERMINAL = ("filled", "canceled", "expired", "rejected", "done_for_day")
 
 
 class BrokerError(RuntimeError):
@@ -31,19 +34,18 @@ class BrokerError(RuntimeError):
 class Broker(Protocol):
     """Everything the trailing-stop trader needs from a broker."""
 
-    def clock(self) -> dict: ...                 # {"is_open": bool, "timestamp": str}
-    def account(self) -> dict: ...               # {"equity": float, "cash": float}
-    def position(self, symbol: str) -> Optional[dict]: ...  # {"qty","avg_entry_price"} or None
+    def clock(self) -> dict: ...
+    def account(self) -> dict: ...
+    def position(self, symbol: str) -> Optional[dict]: ...
     def last_price(self, symbol: str) -> float: ...
     def buy(self, symbol: str, qty: int, *, extended_hours: bool = False,
             limit_price: Optional[float] = None,
             client_order_id: Optional[str] = None) -> Optional[dict]: ...
-    def close(self, symbol: str) -> Optional[dict]: ...  # sell entire position
+    def close(self, symbol: str) -> Optional[dict]: ...
     def flatten_all(self) -> None: ...
 
 
 def _fmt_price(p: float) -> str:
-    # Alpaca allows sub-penny pricing only below $1; round to 2dp at/above $1.
     return f"{p:.4f}" if p < 1.0 else f"{p:.2f}"
 
 
@@ -56,9 +58,10 @@ class AlpacaBroker:
         self.secret = secret
         if not (self.key and self.secret):
             raise BrokerError("ALPACA_KEY_ID / ALPACA_SECRET_KEY not set")
-        if _LIVE_HOST in self.base and "paper" not in self.base and not allow_live:
+        host = (urlparse(self.base).hostname or "").lower()   # case-insensitive, host-only
+        if host == _LIVE_HOST and not allow_live:
             raise BrokerError(
-                f"refusing to construct a LIVE broker for {self.base} without allow_live=True")
+                f"refusing to construct a LIVE broker for host {host} without allow_live=True")
 
     # ------------------------------------------------------------- plumbing
     def _req(self, method: str, url: str, body: Optional[dict] = None):
@@ -81,10 +84,14 @@ class AlpacaBroker:
 
     @staticmethod
     def _num(v) -> Optional[float]:
+        """Parse to a FINITE float, else None. Rejects None, junk, NaN and inf —
+        a non-finite price/qty must never reach the strategy (it disables the
+        stop: `price <= nan` is always False)."""
         try:
-            return None if v is None else float(v)
+            f = None if v is None else float(v)
         except (TypeError, ValueError):
             return None
+        return f if (f is not None and math.isfinite(f)) else None
 
     # ------------------------------------------------------------- reads
     def clock(self) -> dict:
@@ -92,6 +99,8 @@ class AlpacaBroker:
 
     def account(self) -> dict:
         a = self._api("GET", "/v2/account")
+        if not a:
+            raise BrokerError("empty /v2/account response")
         equity, cash = self._num(a.get("equity")), self._num(a.get("cash"))
         if equity is None or cash is None:
             raise BrokerError(f"account has non-numeric balances: "
@@ -103,10 +112,10 @@ class AlpacaBroker:
         try:
             p = self._api("GET", f"/v2/positions/{symbol}")
         except BrokerError as e:
-            if e.code == 404:          # genuine "no open position", by status code
+            if e.code == 404:
                 return None
             raise
-        qty, avg = self._num(p.get("qty")), self._num(p.get("avg_entry_price"))
+        qty, avg = self._num((p or {}).get("qty")), self._num((p or {}).get("avg_entry_price"))
         if qty is None or avg is None:
             raise BrokerError(f"position has non-numeric fields for {symbol}: {p}")
         return {"qty": qty, "avg_entry_price": avg}
@@ -118,20 +127,32 @@ class AlpacaBroker:
             raise BrokerError(f"no last price for {symbol}: {out}")
         return px
 
+    def _safe_last(self, symbol: str) -> Optional[float]:
+        try:
+            return self.last_price(symbol)
+        except BrokerError:
+            return None
+
     # ------------------------------------------------------------- orders
-    def _fill_from(self, o: dict) -> Optional[dict]:
-        """Build a fill dict from an order, INCLUDING partial fills. Returns
-        None only when nothing at all filled."""
+    def _fill_from(self, o: dict, fallback_price: Optional[float]) -> Optional[dict]:
+        """Build a fill dict from an order, INCLUDING partial fills. Returns None
+        only when nothing filled. If a (possibly partial) fill has no average
+        price yet, fall back to the supplied price so filled shares are never
+        dropped from accounting. Rejects non-finite qty/price."""
         fq = self._num(o.get("filled_qty")) or 0.0
+        if fq <= 0:
+            return None
         avg = self._num(o.get("filled_avg_price"))
-        if fq <= 0 or avg is None:
+        if avg is None:
+            avg = self._num(fallback_price)
+        if avg is None or avg <= 0:
             return None
         return {"filled_qty": fq, "fill_price": avg}
 
     def _submit(self, symbol: str, qty: int, side: str, *, extended_hours: bool,
                 limit_price: Optional[float], client_order_id: Optional[str]) -> dict:
-        if int(qty) != qty or qty < 1:
-            raise BrokerError(f"invalid order qty {qty!r}: must be a whole number >= 1")
+        if isinstance(qty, bool) or not isinstance(qty, int) or qty < 1:
+            raise BrokerError(f"invalid order qty {qty!r}: must be a whole int >= 1")
         body = {"symbol": symbol, "qty": str(int(qty)), "side": side,
                 "time_in_force": "day", "extended_hours": bool(extended_hours)}
         if extended_hours:
@@ -146,46 +167,53 @@ class AlpacaBroker:
             body["client_order_id"] = client_order_id[:48]
         return self._api("POST", "/v2/orders", body)
 
-    def _await_fill(self, order_id: str, timeout_s: int = 120) -> Optional[dict]:
-        """Poll until the order reaches a terminal state, returning whatever
-        filled — INCLUDING a partial fill. On timeout, cancel the remainder and
-        re-read once to capture any fill the cancel raced with."""
+    def _await_fill(self, order_id: str, symbol: str, timeout_s: int = 120) -> Optional[dict]:
+        """Poll until terminal, returning whatever filled (incl. partial). Follows
+        a 'replaced' order to its replacement id. On timeout, cancel then poll a
+        few more times so a fill that races the cancel is captured."""
         deadline = time.time() + timeout_s
+        hops = 0
         while time.time() < deadline:
             o = self._api("GET", f"/v2/orders/{order_id}")
             st = o.get("status")
-            if st == "filled":
-                return self._fill_from(o)
-            if st in ("canceled", "expired", "rejected", "done_for_day"):
-                return self._fill_from(o)   # may carry a partial filled_qty
+            if st == "replaced" and o.get("replaced_by") and hops < 5:
+                order_id = o["replaced_by"]      # follow the replacement chain
+                hops += 1
+                continue
+            if st in _TERMINAL:
+                return self._fill_from(o, self._safe_last(symbol))
             time.sleep(2)
-        # Timed out (or stuck in a non-terminal status like replaced/held):
-        # cancel, then re-read so a fill that raced the cancel is not lost.
         try:
             self._api("DELETE", f"/v2/orders/{order_id}")
         except BrokerError:
             pass
-        try:
-            return self._fill_from(self._api("GET", f"/v2/orders/{order_id}"))
-        except BrokerError:
-            return None
+        o = None
+        for _ in range(3):                       # cancel is async — let it settle
+            try:
+                o = self._api("GET", f"/v2/orders/{order_id}")
+            except BrokerError:
+                return None
+            if o.get("status") in _TERMINAL:
+                return self._fill_from(o, self._safe_last(symbol))
+            time.sleep(1)
+        return self._fill_from(o, self._safe_last(symbol)) if o else None
 
     def buy(self, symbol: str, qty: int, *, extended_hours: bool = False,
             limit_price: Optional[float] = None,
             client_order_id: Optional[str] = None) -> Optional[dict]:
         o = self._submit(symbol, qty, "buy", extended_hours=extended_hours,
                          limit_price=limit_price, client_order_id=client_order_id)
-        return self._await_fill(o["id"])
+        return self._await_fill(o["id"], symbol)
 
     def close(self, symbol: str) -> Optional[dict]:
         try:
             o = self._api("DELETE", f"/v2/positions/{symbol}")
         except BrokerError as e:
-            if e.code == 404:          # nothing to close, by status code
+            if e.code == 404:
                 return None
             raise
         if o and o.get("id"):
-            return self._await_fill(o["id"])
+            return self._await_fill(o["id"], symbol)
         return None
 
     def flatten_all(self) -> None:

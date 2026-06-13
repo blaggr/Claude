@@ -235,5 +235,39 @@ def test_max_drawdown_finite_on_total_wipeout():
     assert res.max_drawdown == 0.0  # not NaN
 
 
+def test_intrabar_no_start_entry_bar0_is_arming_only():
+    # enter_at_start=False, intrabar: bar 0 arms the trigger (off its open) but
+    # must NOT itself enter even though its high crosses the trigger.
+    df = _ohlc([(100, 105, 99, 100), (100, 100, 99, 100)])
+    res = run_backtest(df, StrategyParams(trail=1, reentry=1, use_intrabar=True,
+                                          enter_at_start=False), 10_000)
+    assert res.trades == []                       # bar0 high 105 is suppressed (arming only)
+
+
+def test_intrabar_reentry_fill_is_clamped_to_trigger():
+    # After a stop, a re-entry bar that OPENS below the trigger but whose high
+    # crosses it must fill at the trigger, not the cheaper open.
+    df = _ohlc([(100, 100, 100, 100), (100, 100, 95, 96), (98, 105, 98, 104)])
+    res = run_backtest(df, StrategyParams(trail=1, reentry=1, use_intrabar=True), 10_000)
+    entries = [t.entry_price for t in res.trades]
+    assert 100.0 in entries                       # re-entry clamped to trigger (last_exit 99 + 1)
+    assert 98.0 not in entries                    # NOT the open
+
+
+def test_from_dict_repairs_long_without_peak():
+    s = StreamingStrategy.from_dict({"params": {"trail": 1.0, "reentry": 1.0,
+                                                 "enter_at_start": True},
+                                     "state": "long", "peak": None,
+                                     "entry_price": 105.0, "last_exit_price": None})
+    assert s.peak == 105.0                         # repaired from entry_price
+    assert s.update(104.0)["action"] == "SELL"     # works (would crash with peak=None)
+    # long with neither peak nor entry drops to flat rather than carrying a bad state
+    s2 = StreamingStrategy.from_dict({"params": {"trail": 1.0, "reentry": 1.0,
+                                                 "enter_at_start": True},
+                                      "state": "long", "peak": None,
+                                      "entry_price": None, "last_exit_price": None})
+    assert s2.state == "flat"
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

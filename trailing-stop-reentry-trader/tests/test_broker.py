@@ -16,6 +16,7 @@ def _mk(api):
     b = AlpacaBroker.__new__(AlpacaBroker)
     b.base = "https://paper-api.alpaca.markets"; b.key = "k"; b.secret = "s"
     b._api = api
+    b._safe_last = lambda symbol: None     # keep _await_fill offline (no last-price fetch)
     return b
 
 
@@ -28,7 +29,7 @@ def _fast_time(monkeypatch):
 
 def test_await_fill_full():
     b = _mk(lambda m, p, body=None: {"status": "filled", "filled_qty": "10", "filled_avg_price": "9.99"})
-    assert b._await_fill("o1") == {"filled_qty": 10.0, "fill_price": 9.99}
+    assert b._await_fill("o1", "SPY") == {"filled_qty": 10.0, "fill_price": 9.99}
 
 
 def test_await_fill_partial_through_timeout_returns_partial():
@@ -41,7 +42,7 @@ def test_await_fill_partial_through_timeout_returns_partial():
             return None
         return {"status": "partially_filled", "filled_qty": "50", "filled_avg_price": "10.00"}
     b = _mk(api)
-    assert b._await_fill("o1") == {"filled_qty": 50.0, "fill_price": 10.0}
+    assert b._await_fill("o1", "SPY") == {"filled_qty": 50.0, "fill_price": 10.0}
     assert "DELETE" in calls
 
 
@@ -57,12 +58,12 @@ def test_await_fill_cancel_fill_race_recovers_fill():
             return {"status": "new", "filled_qty": "0", "filled_avg_price": None}
         return {"status": "filled", "filled_qty": "10", "filled_avg_price": "100.0"}
     b = _mk(api)
-    assert b._await_fill("o1") == {"filled_qty": 10.0, "fill_price": 100.0}
+    assert b._await_fill("o1", "SPY") == {"filled_qty": 10.0, "fill_price": 100.0}
 
 
 def test_await_fill_nothing_filled_returns_none():
     b = _mk(lambda m, p, body=None: {"status": "rejected", "filled_qty": "0", "filled_avg_price": None})
-    assert b._await_fill("o1") is None
+    assert b._await_fill("o1", "SPY") is None
 
 
 def test_submit_rejects_bad_qty():
@@ -91,6 +92,52 @@ def test_live_url_refused_without_allow_live():
         AlpacaBroker("https://api.alpaca.markets", "k", "s")
     # explicit opt-in is accepted
     assert AlpacaBroker("https://api.alpaca.markets", "k", "s", allow_live=True).base
+
+
+def test_live_url_guard_is_case_insensitive_and_host_only():
+    with pytest.raises(BrokerError):
+        AlpacaBroker("https://API.ALPACA.MARKETS", "k", "s")        # uppercase host
+    with pytest.raises(BrokerError):
+        AlpacaBroker("https://api.alpaca.markets/?paper", "k", "s")  # 'paper' in query, not host
+    # the real paper host is NOT the live host -> allowed
+    assert AlpacaBroker("https://paper-api.alpaca.markets", "k", "s").base
+
+
+def test_num_rejects_non_finite():
+    b = _mk(lambda *a, **k: None)
+    assert b._num("NaN") is None
+    assert b._num("inf") is None
+    assert b._num(float("nan")) is None
+    assert b._num("10.5") == 10.5
+
+
+def test_fill_from_nan_is_rejected():
+    b = _mk(lambda *a, **k: None)
+    assert b._fill_from({"filled_qty": "NaN", "filled_avg_price": "10"}, None) is None
+    assert b._fill_from({"filled_qty": "10", "filled_avg_price": "NaN"}, 99.0) == \
+        {"filled_qty": 10.0, "fill_price": 99.0}   # NaN avg -> fallback price
+
+
+def test_fill_from_partial_with_null_avg_uses_fallback():
+    b = _mk(lambda *a, **k: None)
+    f = b._fill_from({"status": "canceled", "filled_qty": "5", "filled_avg_price": None}, 100.0)
+    assert f == {"filled_qty": 5.0, "fill_price": 100.0}    # 5 shares not dropped
+
+
+def test_await_fill_follows_replaced_order():
+    def api(m, p, body=None):
+        if p.endswith("/orig"):
+            return {"status": "replaced", "replaced_by": "repl", "filled_qty": "0",
+                    "filled_avg_price": None}
+        return {"status": "filled", "filled_qty": "10", "filled_avg_price": "100.0"}
+    b = _mk(api)
+    assert b._await_fill("orig", "SPY") == {"filled_qty": 10.0, "fill_price": 100.0}
+
+
+def test_account_empty_response_raises_brokererror():
+    b = _mk(lambda *a, **k: None)
+    with pytest.raises(BrokerError):
+        b.account()
 
 
 if __name__ == "__main__":
