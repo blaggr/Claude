@@ -10,3 +10,7 @@ worker_state.json
 worker_journal.jsonl
 *.log
 KILL
+
+# credentials + local venv — NEVER commit
+.env.local
+.venv/

@@ -17,10 +17,10 @@ if [ ! -f "$SRC" ]; then
 fi
 
 # Warn if any placeholders are still unfilled
-if grep -q '<FILL ME' "$SRC" || grep -q '<ABSOLUTE PATH' "$SRC"; then
+if grep -q '/ABSOLUTE/PATH/TO' "$SRC"; then
     echo ""
-    echo "WARNING: The plist still contains unfilled placeholders."
-    echo "Edit $SRC and replace every <FILL ME> and <ABSOLUTE PATH> before loading."
+    echo "WARNING: The plist still contains the /ABSOLUTE/PATH/TO/news-trader placeholder."
+    echo "Edit $SRC and set the real absolute path (both places) before loading."
     echo ""
 fi
 
