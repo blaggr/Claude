@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd LaunchAgent for news-trader paper worker.
+
+  BEFORE LOADING:
+    1. Replace ALL <FILL ME> placeholders with real values.
+    2. Replace <ABSOLUTE PATH TO news-trader DIR> with the real absolute path,
+       e.g. /Users/yourname/projects/news-trader
+    3. Review DEPLOY_MAC.md for the full runbook.
+
+  Load with:
+    launchctl load ~/Library/LaunchAgents/com.user.newstrader.plist
+  Unload with:
+    launchctl unload ~/Library/LaunchAgents/com.user.newstrader.plist
+  Kill switch (preferred):
+    touch <ABSOLUTE PATH TO news-trader DIR>/KILL
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.newstrader</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string><ABSOLUTE PATH TO news-trader DIR>/worker.py</string>
+    </array>
+
+    <!-- Working directory so relative imports inside worker.py resolve -->
+    <key>WorkingDirectory</key>
+    <string><ABSOLUTE PATH TO news-trader DIR></string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- launchd will restart the process if it exits (crash or kill switch exit) -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/newstrader.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/newstrader.log</string>
+
+    <!--
+      Credentials and SMTP config.
+      Use Alpaca PAPER keys only — live keys will be rejected by paper_exec.
+      Use a Gmail App Password (not your normal Google password) for SMTP_PASS.
+      Generate one at: https://myaccount.google.com/apppasswords
+    -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ALPACA_KEY_ID</key>
+        <string><FILL ME: your Alpaca paper key ID></string>
+
+        <key>ALPACA_SECRET_KEY</key>
+        <string><FILL ME: your Alpaca paper secret key></string>
+
+        <key>SMTP_HOST</key>
+        <string>smtp.gmail.com</string>
+
+        <key>SMTP_PORT</key>
+        <string>587</string>
+
+        <key>SMTP_USER</key>
+        <string><FILL ME: your Gmail address, e.g. you@gmail.com></string>
+
+        <key>SMTP_PASS</key>
+        <string><FILL ME: your Gmail App Password (16-char, no spaces)></string>
+
+        <key>MAIL_FROM</key>
+        <string><FILL ME: sender address, e.g. you@gmail.com></string>
+
+        <key>MAIL_TO</key>
+        <string><FILL ME: recipient address, e.g. you@gmail.com></string>
+    </dict>
+</dict>
+</plist>
