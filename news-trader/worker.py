@@ -57,6 +57,22 @@ def due_event(now_utc: dt.datetime, events: list, acted_ids: set, *,
     return None
 
 
+def trade_window_open(now_utc: dt.datetime, event, *, delta_s: int,
+                      measure_min: int, settle_s: int = 60) -> bool:
+    """True once the drift measurement window [ts+delta_s, ts+delta_s+measure_min]
+    has fully elapsed (plus a one-bar settle), so the post-release bars actually
+    exist and the reaction can be measured.
+
+    Pair with due_event: due_event caps the UPPER bound (react window) and dedups;
+    this caps the LOWER bound. Without it, the first poll after a release reads
+    'no bars yet' -> drift_signal returns None -> the event is marked acted and
+    burned, so a trade would never fire. settle_s waits one extra bar so the
+    measurement-end minute has printed before we read it.
+    """
+    ready = event.ts + dt.timedelta(seconds=delta_s + settle_s, minutes=measure_min)
+    return now_utc >= ready
+
+
 def should_send_summary(now_et: dt.datetime, last_summary_date, *, after: str = "09:35") -> bool:
     """True if now_et is a weekday, time >= after, and we haven't already sent
     a summary today.
@@ -287,8 +303,13 @@ def run(poll_s: int = 30, events_path: str | None = None,
             today_events = [e for e in events if e.ts.date() == now_et.date()]
 
             # ---- signal check ----
+            # due_event caps the upper bound (react window) + dedups; trade_window_open
+            # caps the lower bound: wait until the measurement window has elapsed so the
+            # post-release bars exist. Without this gate the first poll after release reads
+            # 'no bars yet' -> None -> the finally below burns the event and we never trade.
             ev = due_event(now_utc, events, state["acted_ids"])
-            if ev is not None:
+            if ev is not None and trade_window_open(now_utc, ev, delta_s=_DELTA_S,
+                                                    measure_min=_MEASURE_MIN):
                 eid = ev.ts.isoformat()
                 symbol = ev.payload.get("symbol", "SPY")
                 _journal("event_due", event_id=eid, symbol=symbol, event_type=ev.type)

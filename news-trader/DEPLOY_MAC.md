@@ -41,6 +41,16 @@ cleanly. launchd will then restart it (KeepAlive=true), so if you want it to sta
 stopped, also unload the plist (see step 8 below) or delete the plist from
 `~/Library/LaunchAgents/`.
 
+**g) No horizon exit — protective stop only.** When an event fires, the worker places
+a market entry plus a single 0.5% protective stop (server-side, atomic OTO). It does
+NOT place a time-based exit at the 30-minute horizon, unlike the backtest. The stop is
+a day order, so a position that never hits its stop is held to market close and may
+carry **overnight with no stop attached**. This is a deliberate Phase-1 simplification
+— server-side execution only, no hand-rolled client-side exit loop (that loop was the
+source of the earlier execution failures). The morning email lists any open position;
+flatten it manually in the Alpaca paper dashboard if you don't want it held. At ~8
+paper trades a year, this is a known low-stakes limitation, not a silent gap.
+
 ---
 
 ## Exact steps

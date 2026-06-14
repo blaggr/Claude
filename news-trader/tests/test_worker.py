@@ -4,7 +4,7 @@ import datetime as dt
 import zoneinfo
 import pytest
 
-from worker import due_event, should_send_summary, build_summary
+from worker import due_event, trade_window_open, should_send_summary, build_summary
 from events import Event
 
 ET = zoneinfo.ZoneInfo("America/New_York")
@@ -219,3 +219,39 @@ class TestBuildSummary:
         # EV0..EV4 are dropped; EV5..EV14 appear
         assert "EV14" in body
         assert "EV4" not in body
+
+
+# ---------------------------------------------------------------------------
+# trade_window_open — the lower-bound gate that stops the worker from burning
+# an event on the first poll (before the measurement-window bars exist).
+# ---------------------------------------------------------------------------
+
+class TestTradeWindowOpen:
+    _RELEASE = dt.datetime(2024, 1, 31, 19, 0, tzinfo=UTC)  # FOMC 2 PM ET (winter)
+
+    def test_closed_during_measurement_window(self):
+        # +5 min: measurement window (ends +11, +1 settle = +12) has not elapsed
+        now = self._RELEASE + dt.timedelta(minutes=5)
+        assert trade_window_open(now, _ev(self._RELEASE), delta_s=60, measure_min=10) is False
+
+    def test_closed_at_measurement_end_before_settle(self):
+        # +11 min: window just ended but the 60s settle bar has not printed yet
+        now = self._RELEASE + dt.timedelta(minutes=11)
+        assert trade_window_open(now, _ev(self._RELEASE), delta_s=60, measure_min=10) is False
+
+    def test_open_after_settle(self):
+        # +12 min: window elapsed + settle -> open
+        now = self._RELEASE + dt.timedelta(minutes=12)
+        assert trade_window_open(now, _ev(self._RELEASE), delta_s=60, measure_min=10) is True
+
+    def test_open_well_after(self):
+        now = self._RELEASE + dt.timedelta(minutes=18)
+        assert trade_window_open(now, _ev(self._RELEASE), delta_s=60, measure_min=10) is True
+
+    def test_actionable_band_overlaps_react_window(self):
+        # The lower bound (+12) MUST sit inside due_event's 20-min react window,
+        # or the event expires before it can ever be traded. This guards the fix.
+        ev = _ev(self._RELEASE)
+        now = self._RELEASE + dt.timedelta(minutes=14)        # inside [12, 20]
+        assert trade_window_open(now, ev, delta_s=60, measure_min=10) is True
+        assert due_event(now, [ev], set()) is ev               # still actionable
