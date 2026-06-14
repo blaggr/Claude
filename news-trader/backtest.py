@@ -21,6 +21,7 @@ class Trade:
     exit_px: float
     ret: float                      # net return on the position, after costs
     reason: str
+    size_frac: float = 1.0
 
 
 @dataclass
@@ -40,16 +41,15 @@ def _to_ts(ts: dt.datetime) -> pd.Timestamp:
 
 def _exit(bars: pd.DataFrame, entry_ts: dt.datetime, entry_px: float,
           side: str, horizon_min: int, trail: Optional[float]):
-    """Walk bars after entry; exit at horizon or trailing stop, whichever first."""
+    """Walk bars within (entry, entry+horizon]; exit on trailing stop, else at the
+    last bar in that window. Bounded so it never scans into a later event's bars."""
     deadline = entry_ts + dt.timedelta(minutes=horizon_min)
-    deadline_ts = _to_ts(deadline)
     entry_ts_ts = _to_ts(entry_ts)
-    after = bars[bars["ts"] > entry_ts_ts]
+    deadline_ts = _to_ts(deadline)
+    window = bars[(bars["ts"] > entry_ts_ts) & (bars["ts"] <= deadline_ts)]
     peak = entry_px
-    for _, row in after.iterrows():
-        ts_pd = row["ts"]
-        ts = ts_pd.to_pydatetime()
-        px = float(row["close"])
+    for _, row in window.iterrows():
+        ts, px = row["ts"].to_pydatetime(), float(row["close"])
         if trail is not None:
             if side == "long":
                 peak = max(peak, px)
@@ -59,11 +59,9 @@ def _exit(bars: pd.DataFrame, entry_ts: dt.datetime, entry_px: float,
                 peak = min(peak, px)
                 if px >= peak + trail:
                     return ts, px, "trail"
-        if ts_pd >= deadline_ts:
-            return ts, px, "horizon"
-    if not after.empty:                       # ran out of data: exit at last bar
-        last = after.iloc[-1]
-        return last["ts"].to_pydatetime(), float(last["close"]), "eod"
+    if not window.empty:
+        last = window.iloc[-1]
+        return last["ts"].to_pydatetime(), float(last["close"]), "horizon"
     return entry_ts, entry_px, "no_exit_data"
 
 
@@ -92,7 +90,7 @@ def run_backtest(events: list,
         ret = (exit_px / entry_px - 1.0) if sig.side == "long" else (entry_px / exit_px - 1.0)
         equity *= (1 + sig.size_frac * ret)
         res.trades.append(Trade(ev.ts, sig.symbol, sig.side, entry_ts, entry_px,
-                                exit_ts, exit_px, ret, reason))
+                                exit_ts, exit_px, ret, reason, sig.size_frac))
         res.equity_curve.append((exit_ts, equity))
     res.final_equity = equity
     return res

@@ -31,7 +31,8 @@ def _buy_hold_return(events, bars_by_symbol):
     return p_out / p_in - 1.0
 
 
-def walk_forward(events, bars, grid, cost_model, train_frac=0.6, capital=10_000.0):
+def walk_forward(events, bars, grid, cost_model, train_frac=0.6, capital=10_000.0,
+                 min_sharpe=0.8, max_dd=-0.25, min_n=20):
     events = sorted(events, key=lambda e: e.ts)
     cut = max(1, int(len(events) * train_frac))
     train, test = events[:cut], events[cut:]
@@ -46,14 +47,15 @@ def walk_forward(events, bars, grid, cost_model, train_frac=0.6, capital=10_000.
     test_m = summarize(run_backtest(test, bars, _classify_factory(best), cost_model, capital),
                        benchmark_return=_buy_hold_return(test, bars))
     return {"best_params": best, "train": train_m, "test": test_m,
-            "n_configs": len(grid), "n_train": len(train), "n_test": len(test)}
+            "n_configs": len(grid), "n_train": len(train), "n_test": len(test),
+            "passed": gate(test_m, min_sharpe=min_sharpe, max_dd=max_dd, min_n=min_n)}
 
 
-def gate(test_metrics: dict, *, n: int, min_sharpe: float, max_dd: float,
-         min_n: int) -> bool:
-    """All must hold on the OUT-OF-SAMPLE window: enough events, Sharpe bar,
-    drawdown within limit, and BEATS buy-and-hold."""
+def gate(test_metrics: dict, *, min_sharpe: float, max_dd: float, min_n: int) -> bool:
+    """All must hold on the OUT-OF-SAMPLE metrics: enough events, Sharpe bar,
+    drawdown within limit, and beats buy-and-hold."""
+    n = test_metrics.get("n_trades", 0)
     return (n >= min_n
             and test_metrics.get("sharpe", 0.0) >= min_sharpe
-            and test_metrics.get("max_drawdown", -1.0) >= max_dd       # max_dd is negative
+            and test_metrics.get("max_drawdown", -1.0) >= max_dd
             and test_metrics.get("vs_buyhold", -1.0) >= 0.0)

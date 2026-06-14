@@ -13,8 +13,8 @@ The harness is designed to answer that rigorously:
 - **Strict no-look-ahead.** The signal reads only bars inside the measurement window
   (`[release + 60 s, release + 60 s + 10 min]`). Entry is at the close of that window.
   Exit logic scans only bars that arrive after entry.
-- **Pessimistic cost model.** Each trade pays a fixed commission plus a spread that scales
-  with position size. There is no slippage credit.
+- **Pessimistic cost model.** Each trade pays a flat per-side basis-point haircut
+  (`half_spread + impact`). No commission term; no size scaling.
 - **Walk-forward ready.** `run_backtest` accepts any event list; you partition the data
   yourself to keep train and test sets clean.
 
@@ -28,8 +28,8 @@ The harness is designed to answer that rigorously:
 
 ## Honest caveat on the sample data
 
-The sample data (`sample_data/`) is synthetic plumbing-check data — two events, two tickers,
-a handful of bars. A result like `trades=2  sharpe=0.10` is **not evidence of edge**.
+The sample data (`sample_data/`) is synthetic plumbing-check data — three CPI events on one
+ticker (SPY), a handful of bars. A result like `trades=2  sharpe=0.10` is **not evidence of edge**.
 Real edge assessment needs: genuine historical macro releases, minute bars across a large
 event universe, and walk-forward validation on a held-out period. That evaluation may well
 come out flat or negative after costs.

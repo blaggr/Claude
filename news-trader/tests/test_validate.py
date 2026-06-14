@@ -17,10 +17,12 @@ def test_walk_forward_reports_train_and_test_and_counts():
     assert rep["n_configs"] == 2
     assert rep["n_train"] >= 1 and rep["n_test"] >= 1
     assert "test" in rep and "sharpe" in rep["test"]
+    assert "passed" in rep
 
-def test_gate_rejects_small_n_and_requires_beating_buyhold():
-    strong = {"sharpe":2.0,"max_drawdown":-0.05,"vs_buyhold":0.10}
-    assert gate(strong, n=3, min_sharpe=0.8, max_dd=-0.25, min_n=20) is False   # n too small
-    assert gate(strong, n=30, min_sharpe=0.8, max_dd=-0.25, min_n=20) is True
-    loses = {"sharpe":2.0,"max_drawdown":-0.05,"vs_buyhold":-0.02}
-    assert gate(loses, n=30, min_sharpe=0.8, max_dd=-0.25, min_n=20) is False    # lost to B&H
+def test_gate_requires_n_sharpe_dd_and_beating_buyhold():
+    strong_small = {"sharpe":2.0,"max_drawdown":-0.05,"vs_buyhold":0.10,"n_trades":3}
+    assert gate(strong_small, min_sharpe=0.8, max_dd=-0.25, min_n=20) is False   # n too small
+    strong_big = {"sharpe":2.0,"max_drawdown":-0.05,"vs_buyhold":0.10,"n_trades":30}
+    assert gate(strong_big, min_sharpe=0.8, max_dd=-0.25, min_n=20) is True
+    loses = {"sharpe":2.0,"max_drawdown":-0.05,"vs_buyhold":-0.02,"n_trades":30}
+    assert gate(loses, min_sharpe=0.8, max_dd=-0.25, min_n=20) is False           # lost to B&H

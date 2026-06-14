@@ -4,7 +4,7 @@ import datetime as dt
 
 def _t(ret):
     z = dt.datetime(2024,1,1,tzinfo=dt.timezone.utc)
-    return Trade(z,"SPY","long",z,100,z,100*(1+ret),ret,"horizon")
+    return Trade(z,"SPY","long",z,100,z,100*(1+ret),ret,"horizon",1.0)
 
 def test_summary_keys_and_hit_rate():
     res = Result(trades=[_t(0.02), _t(-0.01), _t(0.03)], initial_capital=1000,
