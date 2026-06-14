@@ -53,6 +53,31 @@ paper trades a year, this is a known low-stakes limitation, not a silent gap.
 
 ---
 
+## Prerequisite: get the code and a Python with pandas
+
+This package currently lives on the `claude/admin-news-trader` branch of
+`github.com/blaggr/Claude`. On your Mac:
+
+```bash
+git clone --branch claude/admin-news-trader --single-branch \
+  https://github.com/blaggr/Claude.git ~/Claude
+cd ~/Claude/news-trader
+```
+
+The worker imports **pandas**. The system `/usr/bin/python3` usually does NOT have
+it, so create a virtualenv and install pandas into it:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install pandas
+```
+
+Print the interpreter path — the plist's `ProgramArguments` must point at it:
+
+```bash
+echo "$(pwd)/.venv/bin/python3"
+```
+
 ## Exact steps
 
 ### 1. Populate the events CSV from the official Fed schedule
@@ -78,7 +103,8 @@ Open `deploy/com.user.newstrader.plist` and replace every placeholder:
 
 | Placeholder | What to put |
 |---|---|
-| `<ABSOLUTE PATH TO news-trader DIR>` | Full path, e.g. `/Users/rob/projects/news-trader` |
+| `<FILL ME: abs path to python3 with pandas ...>` (in ProgramArguments) | The venv interpreter from the Prerequisite, e.g. `/Users/rob/Claude/news-trader/.venv/bin/python3` |
+| `<ABSOLUTE PATH TO news-trader DIR>` | Full path, e.g. `/Users/rob/Claude/news-trader` |
 | `<FILL ME: your Alpaca paper key ID>` | Your Alpaca paper key ID |
 | `<FILL ME: your Alpaca paper secret key>` | Your Alpaca paper secret key |
 | `<FILL ME: your Gmail address>` | e.g. `rob@gmail.com` |

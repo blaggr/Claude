@@ -24,7 +24,10 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
+        <!-- Must be a python3 (3.9+) that HAS pandas installed. The system
+             /usr/bin/python3 usually does NOT. Create a venv (DEPLOY_MAC.md
+             "Prerequisite") and point here at its interpreter, absolute path. -->
+        <string><FILL ME: abs path to python3 with pandas, e.g. /Users/you/Claude/news-trader/.venv/bin/python3></string>
         <string><ABSOLUTE PATH TO news-trader DIR>/worker.py</string>
     </array>
 
