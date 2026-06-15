@@ -357,8 +357,11 @@ def run(poll_s: int = 30, events_path: str | None = None,
                     # Mark acted regardless of trade outcome so we don't re-fire
                     state["acted_ids"].add(eid)
 
-            # ---- daily summary ----
+            # ---- daily summary (attempt at most ONCE per day, even on failure,
+            # so a broken SMTP credential can't hammer the provider every cycle
+            # and trip its abuse protection) ----
             if should_send_summary(now_et, state["last_summary_date"]):
+                state["last_summary_date"] = now_et.date()   # mark attempted up front
                 try:
                     account = _get_account(kid, sec)
                     positions = _get_positions(kid, sec)
@@ -366,7 +369,6 @@ def run(poll_s: int = 30, events_path: str | None = None,
                     subject, body = build_summary(account, positions,
                                                   recent_journal, today_events)
                     mailer.send_email(subject, body)
-                    state["last_summary_date"] = now_et.date()
                     _journal("summary_sent", date=now_et.date().isoformat())
                 except Exception as exc:
                     _journal("summary_error", detail=str(exc))
