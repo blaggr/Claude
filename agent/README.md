@@ -1,0 +1,119 @@
+# AI Trading Agent
+
+An LLM-driven trading **agent** — not another backtest script. It runs the loop
+the [*900+ Hours of Using Claude Code for Trading*](https://aiintrading.substack.com/p/claude-code-trading-900-hours)
+write-up argues *is* the whole product:
+
+```
+context  ->  reason  ->  tool  ->  action  ->  verification  ->  remember  ->  (repeat)
+```
+
+The rest of this repo gives the agent its hands: a calibrated news→trade engine,
+an audited Alpaca adapter, and risk interlocks. The agent is the part that ties
+them together — it decides *what* to do, *checks its own work*, and *remembers*
+across sessions. Paper trading only.
+
+## Why this exists
+
+The existing `experiments/` code is a deterministic pipeline: the LLM is used
+only as a news classifier, and every other decision is hard-coded. The article's
+core lesson is the opposite — the leverage isn't a cleverer signal, it's giving
+a reasoning agent **good tools, live context, and a memory**, then letting it run
+the loop. This module is that agent.
+
+## The loop, concretely
+
+1. **CONTEXT** — load distilled memory (rules, lessons, open positions) + any
+   candidate headlines into the prompt.
+2. **REASON** — the model picks the next tool call.
+3. **TOOL / ACT** — dispatch it. Tools available to the agent:
+   | Tool | What it does | Backed by |
+   |------|--------------|-----------|
+   | `read_memory` | rules, lessons, open positions | `memory.py` |
+   | `analyze_news` | headline → calibrated, sized trade plan | `experiments/news_trade_engine.py` |
+   | `get_quotes` | price snapshot (live → delayed → offline stub) | `marketdata.py` |
+   | `get_portfolio` | equity, cash, positions | `broker.py` |
+   | `place_order` | **paper** whole-share market order, risk-capped | `broker.py` + `experiments/live/risk.py` |
+   | `remember` | persist a durable lesson | `memory.py` |
+4. **VERIFY** — reconcile the orders the agent *intended* against the broker's
+   actual positions, and journal the result. An agent that never checks its own
+   work is the failure mode the article warns about; this step closes the loop.
+5. **REMEMBER** — write one durable lesson and update open-position notes.
+
+## Run it
+
+Works with **zero dependencies, zero network, zero API key** — the offline
+heuristic policy drives the exact same tool loop as Claude would.
+
+```bash
+# built-in demo (offline): a tariff escalation headline + some noise
+python -m agent.run --demo --offline -v
+
+# your own headlines
+python -m agent.run --news "BREAKING: ADDITIONAL 100% TARIFF on China!" \
+                    --news "Productive call with Xi; we agreed to pause tariffs."
+
+# out-of-office regime, only trade high-confidence legs
+python -m agent.run --news "..." --regime out_office --min-confidence high
+
+# inspect what the agent remembers
+python -m agent.run --show-memory
+```
+
+### Upgraded paths (optional, all auto-detected)
+
+- **Reasoning with Claude** — set `ANTHROPIC_API_KEY` (and `pip install
+  anthropic`). Without it, the deterministic `HeuristicLLM` runs the loop.
+- **Live/delayed quotes** — `ALPACA_KEY_ID`/`ALPACA_SECRET_KEY` (free IEX feed)
+  or `yfinance`. Without either, a deterministic offline price stub is used and
+  every quote is tagged with its `source`.
+- **Real broker (still paper)** — with Alpaca keys, `place_order` routes through
+  the audited adapter and `experiments/live/risk.py`. It stays **PAPER** unless
+  you arm *both* `ALPACA_LIVE=1` *and* the acknowledgement file (see that
+  module). No code path reaches the live endpoint by accident.
+
+## Memory — "a system that remembers"
+
+Two human-readable layers under `state/` (git-ignored, regenerated per run):
+
+- `journal.jsonl` — append-only event log; every observation, order, fill,
+  verification and lesson, timestamped. The immutable record.
+- `memory.md` — small, rewritable working memory the agent carries forward:
+  standing rules, lessons, and a one-line note per open position. Kept short on
+  purpose — context is precious, so old lessons are pruned.
+
+You can read and even hand-edit `memory.md` between sessions; the agent picks it
+up next run.
+
+## Safety
+
+- **Paper by default, everywhere.** The default backend is a self-contained
+  offline paper account; the Alpaca backend is paper unless the double interlock
+  is armed.
+- **Per-event budget cap.** A single order can't commit more than 25% of equity
+  (configurable); the toolbox silently caps the size and journals it.
+- **Calibration honesty.** Edges come from small-sample event studies
+  (6–29 events); the agent treats probabilities as priors and is told to stand
+  pat when there's no confident, calibrated edge.
+
+This is a research and learning tool. Backtested/calibrated edges do not predict
+future returns; fees, slippage and taxes are not modeled. Not investment advice.
+
+## Files
+
+| File | Role |
+|------|------|
+| `agent.py` | the loop: `run_session()` + the verification step |
+| `llm.py` | reasoning layer — `AnthropicLLM` (Claude) and the offline `HeuristicLLM`, one `step()` contract |
+| `tools.py` | the toolbox: schemas + dispatcher, reusing the repo's engines |
+| `broker.py` | `LocalPaperBroker` (offline) and `AlpacaBroker` (risk-gated) |
+| `marketdata.py` | price snapshots: live → delayed → offline stub |
+| `memory.py` | journal + distilled working memory |
+| `run.py` | CLI |
+| `tests/test_agent.py` | offline tests for the loop, broker, risk cap, memory, verification |
+
+## Tests
+
+```bash
+python -m pytest agent/tests/test_agent.py -q
+```
