@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from .broker import get_broker
 from .llm import AnthropicLLM, HeuristicLLM
 from .memory import Memory
+from .positions import OpenPositions
 from .tools import TOOL_SCHEMAS, Toolbox
 
 SYSTEM_PROMPT = """\
@@ -39,8 +40,11 @@ How you must behave:
     Only act on legs whose confidence is 'medium' or 'high'.
   - Before any order, check the portfolio. Never commit more than the per-event
     budget to one idea (the toolbox will cap you, but plan within it anyway).
-  - These edges are overnight/intraday. Note the exit window in your reasoning;
-    do not pretend a calibrated overnight move is a multi-day hold.
+  - These edges are overnight/intraday. Exits are AUTOMATED: every position you
+    open is tracked with a trailing stop and a hard time boundary, and the
+    exit check runs before each session and continuously in the live loop, so a
+    position is flattened the moment it decays or its window closes. You may
+    call check_exits or close_position yourself, but never hold past the window.
   - You place PAPER orders. State that plainly. Do not claim real fills.
   - When unsure, do nothing and say so. A skipped trade is a valid outcome.
   - End by recording one short, durable lesson for next time.
@@ -52,6 +56,7 @@ Be concise. Explain each decision in one or two sentences."""
 class AgentResult:
     final_text: str
     orders: list[dict] = field(default_factory=list)
+    exits: list[dict] = field(default_factory=list)
     account: dict = field(default_factory=dict)
     positions: dict = field(default_factory=dict)
     verification: dict = field(default_factory=dict)
@@ -59,6 +64,11 @@ class AgentResult:
 
     def summary(self) -> str:
         lines = [self.final_text or "(no final message)", ""]
+        if self.exits:
+            lines.append("Exits this session:")
+            for e in self.exits:
+                lines.append(f"  - {e.get('exit_side')} {e.get('qty')} {e.get('symbol')} "
+                             f"@ {e.get('exit')} ({e.get('reason')}, pnl {e.get('pnl')})")
         if self.orders:
             lines.append("Orders this session:")
             for o in self.orders:
@@ -104,7 +114,7 @@ def run_session(objective: str = "Review the latest news and trade only a "
                 *, regime: str = "in_office", max_steps: int = 10,
                 llm=None, broker=None, memory: Memory | None = None,
                 allow_network: bool = True, min_confidence: str = "medium",
-                event_budget_pct: float | None = None,
+                event_budget_pct: float | None = None, positions=None,
                 verbose: bool = False) -> AgentResult:
     """Run one full agent session and return the result.
 
@@ -114,14 +124,28 @@ def run_session(objective: str = "Review the latest news and trade only a "
           else the offline HeuristicLLM.
     event_budget_pct: max % of equity one order may commit. None -> the
           EVENT_BUDGET_PCT env var, else 25.
+    positions: an OpenPositions store for automated exits. None -> a default
+          store under state/, so exits are tracked and managed automatically.
     """
     memory = memory or Memory()
     broker = broker or get_broker()
     if event_budget_pct is None:
         event_budget_pct = float(os.environ.get("EVENT_BUDGET_PCT", "25"))
+    if positions is None:
+        positions = OpenPositions()
     toolbox = Toolbox(broker, memory, regime=regime, allow_network=allow_network,
-                      event_budget_pct=event_budget_pct)
+                      event_budget_pct=event_budget_pct, positions=positions)
     news = news or []
+
+    # Risk management first: flatten anything that has hit its trailing stop or
+    # hard boundary before considering any new entry.
+    session_exits: list[dict] = []
+    if toolbox._exits is not None:
+        session_exits = toolbox._exits.check_and_exit()
+        if session_exits and verbose:
+            for e in session_exits:
+                print(f"[exit] {e['exit_side']} {e['qty']} {e['symbol']} @ {e['exit']} "
+                      f"({e['reason']}, pnl {e['pnl']})")
 
     if llm is None:
         llm = AnthropicLLM() if AnthropicLLM.available() else HeuristicLLM(
@@ -178,8 +202,8 @@ def run_session(objective: str = "Review the latest news and trade only a "
     verification = _verify(toolbox, orders)
     account = toolbox.get_portfolio()
     memory.log("session_end", steps=steps, orders=len(orders),
-               equity=account["account"].get("equity"))
+               exits=len(session_exits), equity=account["account"].get("equity"))
 
-    return AgentResult(final_text=final_text, orders=orders,
+    return AgentResult(final_text=final_text, orders=orders, exits=session_exits,
                        account=account["account"], positions=account["positions"],
                        verification=verification, steps=steps)

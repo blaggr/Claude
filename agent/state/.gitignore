@@ -1,4 +1,6 @@
-# Runtime state — agent memory, journal, and paper account are not committed
+# Runtime state — agent memory, journal, account, positions are not committed
 journal.jsonl
 memory.md
 paper_account.json
+open_positions.json
+live_agent_state.json
