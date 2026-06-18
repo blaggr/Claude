@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS launchd agent for the always-on trading driver (paper only).
+
+  Install (per-user, no sudo):
+    1. cp agent/deploy/agent.env.example agent/deploy/agent.env  (fill in, chmod 600)
+       — or just edit the EnvironmentVariables below.
+    2. Replace every CHANGE_ME (your username, the repo path, secrets).
+    3. cp agent/deploy/com.tradingagent.plist ~/Library/LaunchAgents/
+    4. launchctl load -w ~/Library/LaunchAgents/com.tradingagent.plist
+
+  Watch:   tail -f <repo>/agent/state/live_agent.log
+  Stop:    launchctl unload -w ~/Library/LaunchAgents/com.tradingagent.plist
+  Kill+flatten: touch <repo>/experiments/live/KILL   (then unload)
+
+  KeepAlive restarts the process if it crashes; the preflight in ProgramArguments
+  means a misconfig (no keys / wrong broker) exits non-zero and launchd retries
+  every ThrottleInterval instead of silently trading a fake account. PAPER only —
+  ALPACA_LIVE is never set here.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tradingagent</string>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/CHANGE_ME/Claude</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>bash agent/deploy/run_tmux.sh preflight &amp;&amp; exec python3 -m agent.live_agent --interval 60 --budget-pct 10</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ALPACA_KEY_ID</key>      <string>PK_CHANGE_ME</string>
+    <key>ALPACA_SECRET_KEY</key>  <string>CHANGE_ME</string>
+    <key>ANTHROPIC_API_KEY</key>  <string>sk-ant-CHANGE_ME</string>
+    <key>EVENT_BUDGET_PCT</key>   <string>10</string>
+    <key>MAX_DAILY_LOSS_PCT</key> <string>5</string>
+    <key>POLL_SECONDS</key>       <string>60</string>
+  </dict>
+
+  <key>RunAtLoad</key>      <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key> <false/>
+  </dict>
+  <key>ThrottleInterval</key> <integer>30</integer>
+
+  <key>StandardOutPath</key> <string>/Users/CHANGE_ME/Claude/agent/state/live_agent.log</string>
+  <key>StandardErrorPath</key> <string>/Users/CHANGE_ME/Claude/agent/state/live_agent.log</string>
+</dict>
+</plist>

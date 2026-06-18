@@ -168,32 +168,52 @@ does not.
 ## Run it unattended (auto-restart)
 
 Ready-made supervisors live in [`deploy/`](deploy/) so the driver survives
-logout and restarts on crash. Both are **paper only** (neither sets
-`ALPACA_LIVE`). Put your secrets in `deploy/agent.env` first
-(`cp deploy/agent.env.example deploy/agent.env`, fill in, `chmod 600`).
+logout and restarts on crash. All are **paper only** (none sets `ALPACA_LIVE`).
+First put your secrets in `deploy/agent.env`
+(`cp deploy/agent.env.example deploy/agent.env`, fill in, `chmod 600`) — the
+runners auto-source it.
 
-**systemd (Linux, starts on boot):**
+**Preflight gate.** Before launching, each runner runs
+`run_tmux.sh preflight`, which **refuses to start unless the broker resolves to
+`AlpacaBroker PAPER`** (keys present, `pandas` installed, mode is PAPER). This
+means a misconfig fails loudly instead of silently trading the *fake* local
+paper account or — never — a live one. Check it any time, trades nothing:
 ```bash
-# edit User / WorkingDirectory / secrets in the unit first
-sudo cp agent/deploy/trading-agent.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now trading-agent
-journalctl -u trading-agent -f          # watch it
+./agent/deploy/run_tmux.sh preflight
 ```
 
 **tmux (macOS / no systemd / quick VPS run):**
 ```bash
-set -a; source agent/deploy/agent.env; set +a   # load secrets
-./agent/deploy/run_tmux.sh start         # detached, auto-restarting
-./agent/deploy/run_tmux.sh attach        # watch (Ctrl-b d to detach)
+./agent/deploy/run_tmux.sh start         # preflight, then detached + auto-restart
+./agent/deploy/run_tmux.sh logs          # tail the log file
+./agent/deploy/run_tmux.sh attach        # watch live (Ctrl-b d to detach)
 ./agent/deploy/run_tmux.sh kill          # flatten everything + stop
 ```
 
-Both restart **only on crash**; a clean exit or a tripped kill switch ends the
-loop and stays stopped (so a daily-loss halt isn't immediately undone). The
-kill switch is the same file the rest of the system uses —
-`touch experiments/live/KILL` flattens and halts on the next poll; delete it to
-resume.
+**systemd (Linux, starts on boot):**
+```bash
+# edit User / WorkingDirectory / EnvironmentFile path in the unit first
+sudo cp agent/deploy/trading-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now trading-agent
+journalctl -u trading-agent -f           # watch it
+```
+(`ExecStartPre` runs the same preflight, so the service won't start misconfigured.)
+
+**launchd (macOS, starts at login):**
+```bash
+# edit the CHANGE_ME paths + secrets in the plist first
+cp agent/deploy/com.tradingagent.plist ~/Library/LaunchAgents/
+launchctl load -w ~/Library/LaunchAgents/com.tradingagent.plist
+tail -f agent/state/live_agent.log
+```
+
+All restart **only on crash** (tmux backs off and gives up after
+`TRADING_AGENT_MAX_RETRIES` consecutive failures; systemd/launchd throttle).
+A clean exit or a tripped kill switch ends the loop and stays stopped (so a
+daily-loss halt isn't immediately undone). The kill switch is the same file the
+rest of the system uses — `touch experiments/live/KILL` flattens and halts on
+the next poll; delete it to resume.
 
 ### Upgraded paths (optional, all auto-detected)
 
