@@ -8,7 +8,7 @@ Chronological record of refresh cycles. Each autonomous run appends an entry.
   with full provenance, SQLite builder + validator, autonomous-agent playbook,
   scheduled GitHub Actions refresh workflow, Notion/Sheets mirror scaffolding,
   data-source catalog, and expansion-options menu.
-- Seeded **373 cited workforce observations across 46 jurisdictions** via
+- Seeded **414 cited workforce observations across all 51 jurisdictions** via
   parallel web research (every value carries a source URL + confidence tier;
   nothing fabricated; missing values left absent).
 - Known gaps this run: a handful of states still thin on staffing headcount,

@@ -3,8 +3,8 @@
 _Generated 2026-06-18 by agent/coverage_report.py_
 
 - Jurisdictions (state-level): **51**
-- Jurisdictions with >=1 metric: **49**
-- Core-metric fill: **158/306** (51%)
+- Jurisdictions with >=1 metric: **51**
+- Core-metric fill: **166/306** (54%)
 
 Core metrics tracked: caseworker_turnover_rate_pct, vacancy_rate_pct, avg_caseload_per_caseworker, recommended_caseload_standard, caseworker_entry_salary_usd, children_in_foster_care
 
@@ -14,7 +14,7 @@ Core metrics tracked: caseworker_turnover_rate_pct, vacancy_rate_pct, avg_caselo
 | AL ⚠️ | 7 | 2 | 2024 |
 | AR | 8 | 5 | 2025 |
 | AZ | 8 | 4 | 2025 |
-| CA ❌ | 0 | 0 | - |
+| CA | 10 | 4 | 2024 |
 | CO ⚠️ | 9 | 2 | 2024 |
 | CT ⚠️ | 5 | 2 | 2025 |
 | DC ⚠️ | 8 | 2 | 2025 |
@@ -44,7 +44,7 @@ Core metrics tracked: caseworker_turnover_rate_pct, vacancy_rate_pct, avg_caselo
 | NJ | 13 | 5 | 2024 |
 | NM | 9 | 4 | 2025 |
 | NV ⚠️ | 7 | 2 | 2025 |
-| NY ❌ | 0 | 0 | - |
+| NY | 11 | 4 | 2024 |
 | OH | 9 | 5 | 2024 |
 | OK ⚠️ | 7 | 1 | 2024 |
 | OR ⚠️ | 6 | 3 | 2024 |

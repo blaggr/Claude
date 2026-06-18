@@ -57,9 +57,9 @@ fabricate; cite everything; missing is left missing.**
   automated fetch) — flagged low/medium pending primary-table verification.
 - **Privatized case management** (e.g., KS, NE Eastern, FL CBC lead agencies)
   means some figures describe contractors, not public employees — flagged.
-- **Coverage is tiered**: 51 states now (46 with data at v0.1); counties are
+- **Coverage is tiered**: 51 states now (all 51 with data at v0.1); counties are
   being layered in. See `docs/COVERAGE.md` for live gaps.
 
 ## Status
-v0.1 — see `agent/update_log.md`. Built 2026-06-18 with 373 cited observations
-across 46 jurisdictions.
+v0.1 — see `agent/update_log.md`. Built 2026-06-18 with 414 cited observations
+across all 51 jurisdictions.
