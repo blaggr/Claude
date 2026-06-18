@@ -43,6 +43,22 @@ KNOWN_METRIC_KEYS = {
     "bls_social_workers_employment", "bls_social_workers_mean_wage_usd",
     "bls_social_workers_median_wage_usd",
     "admin_structure", "county_data_availability",
+    # --- Expansion: Tier 1 + Tier 2 (docs/EXPANSION_OPTIONS.md) ---
+    "bls_metro_median_wage_usd",                 # T1 #1 (metro benchmark)
+    "census_public_welfare_employment",          # T1 #2 ASPEP
+    "census_public_welfare_payroll_monthly_usd", # T1 #2 ASPEP
+    "ipeds_bsw_completions",                      # T1 #3 pipeline supply
+    "ipeds_msw_completions",                      # T1 #3 pipeline supply
+    "title_iv_e_partnership",                     # T1 #4 (text: program/partner)
+    "title_iv_e_stipends_annual",                # T1 #4
+    "caseworker_salary_step_count",              # T1 #5 salary schedule depth
+    "cw_job_postings_open",                       # T2 #6 vacancy signal
+    "agency_personnel_budget_usd",               # T2 #7
+    "funded_caseworker_positions",               # T2 #7
+    "aswb_licensed_social_workers",              # T2 #8
+    "children_per_caseworker_derived",           # T2 #9 derived workload
+    "investigations_per_investigator_derived",   # T2 #9 derived workload
+    "cfsr_pip_workforce_measure",                # T2 #10 (text)
 }
 
 
@@ -157,6 +173,9 @@ def main() -> int:
 
     agencies = read_csv(os.path.join(DATA, "agencies.csv"))
     metrics = read_csv(os.path.join(DATA, "metrics.csv"))
+    # Derived metrics are regenerated (not hand-edited) by agent/derive_metrics.py
+    # and kept in a separate file so they stay idempotent across rebuilds.
+    metrics += read_csv(os.path.join(DATA, "derived_metrics.csv"))
     if not agencies:
         print("ERROR: data/agencies.csv missing or empty", file=sys.stderr)
         return 1

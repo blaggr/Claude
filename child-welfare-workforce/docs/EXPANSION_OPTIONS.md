@@ -9,6 +9,13 @@ licensing, scraping, or heavy normalization).
 Tell me which of these to prioritize and I'll wire them into the next refresh
 cycles. My recommended first three are marked ⭐.
 
+**Status (v0.2):** Tier 1 + Tier 2 selected for build-out. Metric keys for all
+of them are now in the data dictionary. **Built this cycle:** #9 derived
+workload ratios (live in the DB); #2 Census ASPEP and #3 IPEDS pipeline
+collectors (run weekly in CI → `data/incoming/` for review). The remaining
+Tier 1/2 items (#1, #4, #5, #6, #7, #8, #10) are gathered by the weekly agent
+per `agent/AGENT_PLAYBOOK.md` and accumulate over cycles.
+
 ## Tier 1 — high value, tractable
 
 ⭐ **1. BLS OEWS metro-level wages (SOC 21-1021)** — adds sub-state wage

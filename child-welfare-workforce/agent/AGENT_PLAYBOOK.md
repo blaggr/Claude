@@ -43,14 +43,18 @@ rotate, prioritizing staleness). Steps:
    if sources genuinely differ; otherwise prefer the official source and note it.
 5. **Validate.** `python db/build_db.py --check` must pass (schema, units,
    provenance). Fix issues before committing.
-6. **Rebuild & report.** `python db/build_db.py` rebuilds `db/cww.db`;
+6. **Run expansion collectors + derivations** (see "Expansion pipeline" below),
+   review their `data/incoming/*.csv` output, and merge trustworthy rows into
+   `data/metrics.csv`. Then regenerate derived metrics.
+7. **Rebuild & report.** `python db/build_db.py` rebuilds `db/cww.db`;
    `python agent/coverage_report.py` regenerates `docs/COVERAGE.md`.
-7. **Mirror (optional).** If mirror credentials are present, run
-   `python mirror/to_notion.py` / `to_sheets.py`.
-8. **Log.** Append a dated entry to `agent/update_log.md` summarizing what
+8. **Mirror.** Sync the agency summary to Notion (database
+   `fc25ce7e-6c92-4178-9eb8-60f3b3a83287`) via the Notion MCP tools, or run
+   `python mirror/to_notion.py` / `to_sheets.py` if credentials are present.
+9. **Log.** Append a dated entry to `agent/update_log.md` summarizing what
    changed (agencies touched, rows added/updated, notable findings).
-9. **Open a PR.** Commit to the working branch and open/update a draft PR so a
-   human can review the diff. The diff IS the record of changes.
+10. **Open a PR.** Commit to the working branch and open/update a draft PR so a
+    human can review the diff. The diff IS the record of changes.
 
 ## County expansion (tiered)
 State-level coverage comes first. Layer counties in for
@@ -73,3 +77,31 @@ budget books, large-county dashboards (LA DCFS, NYC ACS, Cook County, etc.).
 - Don't store PII — only aggregate workforce statistics.
 - Don't overwrite the human-curated `agencies.csv` admin-structure column
   without a citation for the change.
+
+## Expansion pipeline (Tier 1 + Tier 2 — see docs/EXPANSION_OPTIONS.md)
+
+Each cycle, run the automated collectors and the derivation step. Collectors
+write to `data/incoming/` and never auto-merge — review for sanity, then append
+trustworthy rows to `data/metrics.csv` (quoting any commas).
+
+Automated (deterministic, run in the weekly Action):
+- `python agent/collectors/ipeds_social_work.py` — T1 #3 degree-pipeline supply
+  (Urban Institute / IPEDS). Reliable; verify award-level codes once.
+- `python agent/collectors/census_aspep.py` — T1 #2 public-welfare employment &
+  payroll (Census ASPEP). **Validate the API path/function/var codes on first
+  run** and map FIPS agency_ids to `US-<USPS>` before merging.
+- `python agent/derive_metrics.py` — T2 #9 derived workload ratios. Regenerates
+  `data/derived_metrics.csv` (idempotent; folded in by build_db).
+
+Agent-gathered each cycle (research, same cite-everything rules; new metric keys
+already in the data dictionary):
+- T1 #4 `title_iv_e_partnership` / `title_iv_e_stipends_annual` — state IV-E
+  university education partnerships (finite list; CalSWEC etc.).
+- T1 #5 `caseworker_salary_step_count` + fuller salary schedules.
+- T2 #6 `cw_job_postings_open` — open caseworker postings as a vacancy signal.
+- T2 #7 `agency_personnel_budget_usd` / `funded_caseworker_positions` — budgets.
+- T2 #8 `aswb_licensed_social_workers` — ASWB licensure counts.
+- T2 #10 `cfsr_pip_workforce_measure` — CFSR PIP workforce targets/status.
+
+T1 #1 (BLS metro wages) maps to a metro, not a state agency; add when the
+county/metro dimension lands (see county build-out).

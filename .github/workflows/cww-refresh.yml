@@ -44,6 +44,7 @@ jobs:
       - name: Validate CSVs and build database
         working-directory: child-welfare-workforce
         run: |
+          python agent/derive_metrics.py
           python db/build_db.py --check
           python db/build_db.py
           python agent/coverage_report.py
@@ -63,6 +64,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Run expansion collectors (Tier 1) into data/incoming for review
+        working-directory: child-welfare-workforce
+        continue-on-error: true
+        env:
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+        run: |
+          python agent/collectors/ipeds_social_work.py || true
+          python agent/collectors/census_aspep.py || true
       - name: Run Claude Code refresh cycle
         uses: anthropics/claude-code-action@v1
         with:

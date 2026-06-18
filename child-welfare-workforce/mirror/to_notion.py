@@ -26,7 +26,8 @@ import os, sqlite3, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(ROOT, "db", "cww.db")
 API_KEY = os.environ.get("NOTION_API_KEY")
-DB_ID = os.environ.get("NOTION_DATABASE_ID")
+# Defaults to the database created via the Notion MCP connection (v0.2).
+DB_ID = os.environ.get("NOTION_DATABASE_ID", "fc25ce7e-6c92-4178-9eb8-60f3b3a83287")
 
 # Core metrics shown as Notion properties (one page per agency).
 CORE = ["caseworker_turnover_rate_pct", "vacancy_rate_pct",
