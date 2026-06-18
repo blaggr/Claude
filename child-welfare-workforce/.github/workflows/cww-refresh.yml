@@ -1,0 +1,72 @@
+name: CWW Database Refresh
+
+# Autonomous refresh of the Child Welfare Workforce Database.
+#
+# This workflow is the "continuous" engine. On a schedule it launches a
+# Claude Code session that reads agent/AGENT_PLAYBOOK.md and executes one
+# refresh cycle: pick the stalest agencies, research them via web tools,
+# append cited rows to data/metrics.csv, rebuild the DB, regenerate coverage,
+# and open/update a draft PR for human review.
+#
+# Requires repo secret ANTHROPIC_API_KEY (or a Claude Code OAuth token).
+# The data-validation job runs on every push/PR with no secrets needed.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"   # every Monday 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      target_count:
+        description: "How many agencies to refresh this run"
+        default: "8"
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # Always-on gate: the database must build and validate.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate CSVs and build database
+        working-directory: child-welfare-workforce
+        run: |
+          python db/build_db.py --check
+          python db/build_db.py
+      - name: Upload built database
+        uses: actions/upload-artifact@v4
+        with:
+          name: cww-db
+          path: child-welfare-workforce/db/cww.db
+
+  # Scheduled autonomous gathering cycle.
+  refresh:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run Claude Code refresh cycle
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Read child-welfare-workforce/agent/AGENT_PLAYBOOK.md and execute
+            exactly ONE refresh cycle for ${{ github.event.inputs.target_count || 8 }}
+            agencies. Follow the prime directives: never fabricate, cite every
+            value, validate with db/build_db.py --check before committing.
+            Append rows to child-welfare-workforce/data/metrics.csv, rebuild the
+            DB, regenerate docs/COVERAGE.md, append to agent/update_log.md, then
+            commit on branch claude/cww-refresh-${{ github.run_id }} and open a
+            DRAFT pull request summarizing what changed.
+        # If the action is unavailable, this step can be replaced with a
+        # `claude -p "<prompt>"` CLI invocation; see agent/README for details.

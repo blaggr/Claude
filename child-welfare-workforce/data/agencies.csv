@@ -1,0 +1,52 @@
+agency_id,jurisdiction_level,state,county,fips,agency_name,agency_url,admin_structure,population,notes
+US-AL,state,AL,,01,Alabama Department of Human Resources (DHR),,state-administered,,
+US-AK,state,AK,,02,Alaska Office of Children's Services (OCS),,state-administered,,
+US-AZ,state,AZ,,04,Arizona Department of Child Safety (DCS),,state-administered,,Standalone child safety agency since 2014
+US-AR,state,AR,,05,Arkansas DHS Division of Children and Family Services (DCFS),,state-administered,,
+US-CA,state,CA,,06,California Department of Social Services (CDSS),,state-supervised-county-administered,,58 county child welfare agencies; data via UC Berkeley CCWIP
+US-CO,state,CO,,08,Colorado DHS Office of Children Youth and Families,,state-supervised-county-administered,,64 county departments of human/social services
+US-CT,state,CT,,09,Connecticut Department of Children and Families (DCF),,state-administered,,
+US-DE,state,DE,,10,Delaware Department of Services for Children Youth and Their Families (DSCYF),,state-administered,,
+US-DC,state,DC,,11,DC Child and Family Services Agency (CFSA),,state-administered,,Single jurisdiction
+US-FL,state,FL,,12,Florida Department of Children and Families (DCF),,state-administered,,Case management via Community-Based Care lead agencies
+US-GA,state,GA,,13,Georgia Division of Family and Children Services (DFCS),,state-administered,,
+US-HI,state,HI,,15,Hawaii DHS Child Welfare Services (CWS),,state-administered,,
+US-ID,state,ID,,16,Idaho DHW Child and Family Services,,state-administered,,
+US-IL,state,IL,,17,Illinois Department of Children and Family Services (DCFS),,state-administered,,
+US-IN,state,IN,,18,Indiana Department of Child Services (DCS),,state-administered,,
+US-IA,state,IA,,19,Iowa Department of Health and Human Services,,state-administered,,Child welfare merged into HHS in 2023
+US-KS,state,KS,,20,Kansas Department for Children and Families (DCF),,state-administered,,Case management contracted to private providers
+US-KY,state,KY,,21,Kentucky Department for Community Based Services (DCBS),,state-administered,,
+US-LA,state,LA,,22,Louisiana Department of Children and Family Services (DCFS),,state-administered,,
+US-ME,state,ME,,23,Maine Office of Child and Family Services (OCFS),,state-administered,,
+US-MD,state,MD,,24,Maryland DHS Social Services Administration,,state-supervised-county-administered,,Locally operated by 24 local DSS
+US-MA,state,MA,,25,Massachusetts Department of Children and Families (DCF),,state-administered,,
+US-MI,state,MI,,26,Michigan DHHS Children's Services Agency,,state-administered,,County-operated under state supervision in practice
+US-MN,state,MN,,27,Minnesota Department of Children Youth and Families,,state-supervised-county-administered,,New cabinet agency (2025); 87 county/tribal agencies
+US-MS,state,MS,,28,Mississippi Department of Child Protection Services (MDCPS),,state-administered,,
+US-MO,state,MO,,29,Missouri Children's Division (DSS),,state-administered,,
+US-MT,state,MT,,30,Montana DPHHS Child and Family Services Division,,state-administered,,
+US-NE,state,NE,,31,Nebraska DHHS Division of Children and Family Services,,state-administered,,
+US-NV,state,NV,,32,Nevada Division of Child and Family Services (DCFS),,hybrid,,State-run in rural counties; Clark and Washoe county-administered
+US-NH,state,NH,,33,New Hampshire Division for Children Youth and Families (DCYF),,state-administered,,
+US-NJ,state,NJ,,34,New Jersey Department of Children and Families (DCF),,state-administered,,
+US-NM,state,NM,,35,New Mexico Children Youth and Families Department (CYFD),,state-administered,,
+US-NY,state,NY,,36,New York State Office of Children and Family Services (OCFS),,state-supervised-county-administered,,58 local districts incl. NYC ACS
+US-NC,state,NC,,37,North Carolina Division of Social Services (DSS),,state-supervised-county-administered,,100 county DSS
+US-ND,state,ND,,38,North Dakota DHHS Children and Family Services,,hybrid,,Human Service Zones since 2019 reorganization
+US-OH,state,OH,,39,Ohio Department of Children and Youth,,county-administered,,88 county PCSAs; new cabinet agency 2023
+US-OK,state,OK,,40,Oklahoma DHS Child Welfare Services,,state-administered,,
+US-OR,state,OR,,41,Oregon DHS Child Welfare Division,,state-administered,,
+US-PA,state,PA,,42,Pennsylvania DHS Office of Children Youth and Families (OCYF),,state-supervised-county-administered,,67 county children and youth agencies
+US-RI,state,RI,,44,Rhode Island Department of Children Youth and Families (DCYF),,state-administered,,
+US-SC,state,SC,,45,South Carolina Department of Social Services (DSS),,state-administered,,
+US-SD,state,SD,,46,South Dakota DSS Child Protection Services,,state-administered,,
+US-TN,state,TN,,47,Tennessee Department of Children's Services (DCS),,state-administered,,
+US-TX,state,TX,,48,Texas Department of Family and Protective Services (DFPS),,state-administered,,
+US-UT,state,UT,,49,Utah Division of Child and Family Services (DCFS),,state-administered,,
+US-VT,state,VT,,50,Vermont Department for Children and Families (DCF),,state-administered,,
+US-VA,state,VA,,51,Virginia Department of Social Services (VDSS),,state-supervised-county-administered,,120 local departments of social services
+US-WA,state,WA,,53,Washington Department of Children Youth and Families (DCYF),,state-administered,,
+US-WV,state,WV,,54,West Virginia DoHS Bureau for Social Services,,state-administered,,
+US-WI,state,WI,,55,Wisconsin Department of Children and Families (DCF),,state-supervised-county-administered,,72 county agencies; Milwaukee state-run (DMCPS)
+US-WY,state,WY,,56,Wyoming Department of Family Services (DFS),,state-administered,,
