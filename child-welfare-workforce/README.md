@@ -41,11 +41,13 @@ sqlite3 db/cww.db "SELECT state, value_numeric FROM metrics_latest
 ```
 
 ## How it stays current ("the agent")
-A scheduled GitHub Action (`.github/workflows/cww-refresh.yml`, repo root) launches a
-Claude Code session that follows `agent/AGENT_PLAYBOOK.md`: pick the stalest
-agencies → research via web tools → append **cited** rows → validate → rebuild →
-refresh coverage → open a draft PR for review. Prime directive: **never
-fabricate; cite everything; missing is left missing.**
+A scheduled GitHub Action (`.github/workflows/cww-refresh.yml`, repo root) runs
+weekly. It executes the deterministic collectors + derivations, then an
+**OpenAI-powered gatherer** (`agent/openai_refresh.py`, Responses API + web
+search) researches the stalest agencies and **proposes cited rows** into
+`data/incoming/`, and opens a **draft PR** for review. Prime directive: **never
+fabricate; cite everything; missing is left missing.** Nothing enters the
+canonical `data/metrics.csv` without passing validation and review.
 
 ## Honest limitations (read before using the numbers)
 - **No single national workforce feed exists.** State-level vacancy/turnover/

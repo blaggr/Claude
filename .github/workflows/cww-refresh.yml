@@ -72,18 +72,28 @@ jobs:
         run: |
           python agent/collectors/ipeds_social_work.py || true
           python agent/collectors/census_aspep.py || true
-      - name: Run Claude Code refresh cycle
-        uses: anthropics/claude-code-action@v1
+      - name: Install OpenAI SDK
+        run: pip install --quiet openai
+      - name: Run OpenAI refresh gatherer (proposes cited rows)
+        working-directory: child-welfare-workforce
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          CWW_TARGET_COUNT: ${{ github.event.inputs.target_count || 8 }}
+        run: python agent/openai_refresh.py
+      - name: Open draft PR with proposed updates for review
+        uses: peter-evans/create-pull-request@v6
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            Read child-welfare-workforce/agent/AGENT_PLAYBOOK.md and execute
-            exactly ONE refresh cycle for ${{ github.event.inputs.target_count || 8 }}
-            agencies. Follow the prime directives: never fabricate, cite every
-            value, validate with db/build_db.py --check before committing.
-            Append rows to child-welfare-workforce/data/metrics.csv, rebuild the
-            DB, regenerate docs/COVERAGE.md, append to agent/update_log.md, then
-            commit on branch claude/cww-refresh-${{ github.run_id }} and open a
-            DRAFT pull request summarizing what changed.
-        # If the action is unavailable, replace with a `claude -p "<prompt>"`
-        # CLI invocation; see agent/AGENT_PLAYBOOK.md.
+          branch: cww-refresh-${{ github.run_id }}
+          draft: true
+          title: "CWW weekly refresh — proposed updates (run ${{ github.run_id }})"
+          commit-message: "CWW weekly refresh: collector + OpenAI proposed rows"
+          body: |
+            Automated weekly refresh. Proposed, **cited** workforce rows are in
+            `child-welfare-workforce/data/incoming/` (OpenAI gatherer + Tier-1
+            collectors). Review for accuracy, then merge trustworthy rows into
+            `data/metrics.csv` (the canonical, validated dataset). Nothing here
+            has entered the canonical file yet.
+          add-paths: child-welfare-workforce/data/incoming/**
+
