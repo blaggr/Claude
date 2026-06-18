@@ -217,8 +217,11 @@ the next poll; delete it to resume.
 
 ### Upgraded paths (optional, all auto-detected)
 
-- **Reasoning with Claude** — set `ANTHROPIC_API_KEY` (and `pip install
-  anthropic`). Without it, the deterministic `HeuristicLLM` runs the loop.
+- **Reasoning with an LLM** — set `OPENAI_API_KEY` (`pip install openai`;
+  model via `OPENAI_MODEL`, default `gpt-4o-mini`) **or** `ANTHROPIC_API_KEY`
+  (`pip install anthropic`). OpenAI is preferred when both are set. The same key
+  also drives news classification. Without either, the deterministic
+  `HeuristicLLM` + keyword classifier run the loop.
 - **Live/delayed quotes** — `ALPACA_KEY_ID`/`ALPACA_SECRET_KEY` (free IEX feed)
   or `yfinance`. Without either, a deterministic offline price stub is used and
   every quote is tagged with its `source`.

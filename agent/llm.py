@@ -2,10 +2,15 @@
 
 A "step" of the loop is: given the system prompt, the tool schemas, and the
 conversation so far, return either tool calls to execute or a final answer.
-Both backends below implement that single `step()` contract:
+Each backend below implements that single `step()` contract:
 
-  * AnthropicLLM  — real tool-use with Claude (claude-opus-4-8). Used whenever
+  * AnthropicLLM  — real tool-use with Claude (claude-opus-4-8). Used when
     ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) is set.
+
+  * OpenAILLM     — OpenAI function-calling (OPENAI_MODEL, default gpt-4o-mini).
+    Used when OPENAI_API_KEY is set (preferred over Anthropic when both are).
+    Keeps its own OpenAI-format history and converts the Anthropic-shaped tool
+    schemas + the loop's tool results, so the loop is provider-agnostic.
 
   * HeuristicLLM  — a deterministic offline policy that walks the *same* tools
     in the order the write-up recommends (remember → analyze → check book →
@@ -13,7 +18,7 @@ Both backends below implement that single `step()` contract:
     makes the agent runnable in a locked-down environment and unit-testable,
     mirroring the graceful-fallback pattern used elsewhere in this repo.
 
-The two are interchangeable: the agent loop never branches on which is active.
+All are interchangeable: the agent loop never branches on which is active.
 """
 from __future__ import annotations
 
@@ -79,6 +84,85 @@ class AnthropicLLM:
         if block.type == "tool_use":
             return {"type": "tool_use", "id": block.id, "name": block.name, "input": block.input}
         return {"type": block.type}
+
+
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+
+class OpenAILLM:
+    """OpenAI function-calling backend, interchangeable with AnthropicLLM.
+
+    The agent loop hands tools in Anthropic shape and passes tool results back
+    via ``last_outputs`` each step. This backend keeps its OWN OpenAI-format
+    message history (system + the initial user context, then assistant/tool
+    turns), converting the tool schemas and correlating each result with the
+    tool-call id it emitted the previous step — so it slots into the identical
+    loop without the loop knowing which provider is active.
+    """
+
+    def __init__(self, model: str = OPENAI_MODEL, max_tokens: int = 1500, client=None):
+        if client is None:
+            from openai import OpenAI  # lazy
+            client = OpenAI()
+        self.client = client
+        self.model = model
+        self.max_tokens = max_tokens
+        self._messages: list[dict] = []
+        self._pending_ids: list[str] = []
+
+    @staticmethod
+    def available() -> bool:
+        return bool(os.environ.get("OPENAI_API_KEY"))
+
+    @staticmethod
+    def _to_openai_tools(tools: list[dict]) -> list[dict]:
+        return [{"type": "function", "function": {
+            "name": t["name"], "description": t["description"],
+            "parameters": t["input_schema"]}} for t in tools]
+
+    @staticmethod
+    def _first_user_text(messages: list[dict]) -> str:
+        for m in messages:
+            if m.get("role") == "user" and isinstance(m.get("content"), str):
+                return m["content"]
+        return ""
+
+    def step(self, system: str, tools: list[dict], messages: list[dict],
+             last_outputs=None) -> Step:
+        import json as _json
+        if not self._messages:                       # first call: seed history
+            self._messages = [{"role": "system", "content": system},
+                              {"role": "user", "content": self._first_user_text(messages)}]
+        # feed back the results of the tool calls we emitted last step
+        for tc_id, out in zip(self._pending_ids, last_outputs or []):
+            self._messages.append({"role": "tool", "tool_call_id": tc_id,
+                                   "content": _json.dumps(out["result"], default=str)})
+        self._pending_ids = []
+
+        resp = self.client.chat.completions.create(
+            model=self.model, max_tokens=self.max_tokens,
+            messages=self._messages, tools=self._to_openai_tools(tools),
+            tool_choice="auto",
+        )
+        msg = resp.choices[0].message
+        # record the assistant turn verbatim so the next tool messages attach
+        assistant = {"role": "assistant", "content": msg.content or ""}
+        calls = []
+        if getattr(msg, "tool_calls", None):
+            assistant["tool_calls"] = [
+                {"id": tc.id, "type": "function",
+                 "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                for tc in msg.tool_calls]
+            for tc in msg.tool_calls:
+                try:
+                    args = _json.loads(tc.function.arguments or "{}")
+                except _json.JSONDecodeError:
+                    args = {}
+                calls.append(ToolCall(tc.id, tc.function.name, args))
+            self._pending_ids = [tc.id for tc in msg.tool_calls]
+        self._messages.append(assistant)
+        return Step(text=msg.content or None, tool_calls=calls)
+
 
 
 class HeuristicLLM:
