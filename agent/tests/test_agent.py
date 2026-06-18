@@ -17,7 +17,11 @@ import datetime as dt
 
 from agent.agent import run_session
 from agent.broker import LocalPaperBroker
+from agent.costs import CostModel
 from agent.exits import ExitManager, TrailingTracker, boundary_after, trail_pct_for
+
+ZERO_COST = CostModel(commission_per_share=0.0, min_commission=0.0,
+                      half_spread_bps=0.0, slippage_bps=0.0, borrow_rate_annual=0.0)
 from agent.llm import HeuristicLLM, Step, ToolCall
 from agent.memory import Memory
 from agent.positions import OpenPositions
@@ -66,10 +70,36 @@ def test_paper_broker_short_then_account(fresh):
 def test_event_budget_caps_order(fresh):
     mem, brk = fresh
     tb = Toolbox(brk, mem, event_budget_pct=25.0, allow_network=False)
-    # 25% of 10k = 2500; at stub SPY 600 -> max 4 shares even if we ask for 50
+    # high-conviction leg so risk sizing wants a lot -> the 25% budget ceiling
+    # binds: 25% of 10k = 2500; at stub SPY 600 -> max 4 shares even asking 50
+    tb._last_plan["SPY"] = {"instrument": "SPY", "side": "BUY",
+                            "probability": 0.95, "expected_move_pct": 5.0}
     res = tb.place_order("SPY", "buy", 50, reason="test cap")
     assert res["status"] == "filled"
-    assert res["qty"] == 4
+    assert 1 <= res["qty"] <= 4   # never exceeds the 25% budget ceiling
+
+
+def test_risk_sizing_shrinks_below_budget(fresh):
+    mem, brk = fresh
+    tb = Toolbox(brk, mem, event_budget_pct=25.0, allow_network=False)
+    # a marginal-edge leg (no analysis -> default p≈0.55) should be sized well
+    # below the 4-share budget ceiling by the vol/Kelly model, with a 1-share floor
+    res = tb.place_order("SPY", "buy", 50, reason="marginal")
+    assert res["status"] == "filled"
+    assert 1 <= res["qty"] < 4
+
+
+def test_circuit_breaker_blocks_disabled_symbol(fresh):
+    from agent.performance import CircuitBreaker
+    mem, brk = fresh
+    CircuitBreaker(state_dir=mem.dir).disable("SPY", reason="test")
+    tb = Toolbox(brk, mem, allow_network=False)
+    res = tb.place_order("SPY", "sell", 5, reason="should be blocked")
+    assert res["status"] == "rejected" and "circuit breaker" in res["note"]
+    assert brk.positions() == {}
+    # analyze_news flags the disabled leg/topic
+    plan = tb.analyze_news(ESCALATION)
+    assert "SPY" in plan["disabled"]
 
 
 # ---------------------------------------------------------------- memory
@@ -157,7 +187,8 @@ def test_scripted_llm_drives_loop(fresh):
     assert res.final_text.startswith("Done")
     filled = [o for o in res.orders if o.get("status") == "filled"]
     assert filled and filled[0]["symbol"] == "GLD"
-    assert brk.positions()["GLD"]["qty"] == 2
+    # risk sizing may shrink the scripted qty=2; the loop still fills >= 1 share
+    assert brk.positions()["GLD"]["qty"] >= 1
 
 
 # ---------------------------------------------------------------- budget flag
@@ -241,7 +272,7 @@ def test_exit_on_boundary(tmp_path):
     brk = LocalPaperBroker(start_cash=10_000.0, state_dir=str(tmp_path))
     pos = OpenPositions(state_dir=str(tmp_path))
     brk.market_order("SPY", "buy", 5, 600.0)          # open a long
-    mgr = ExitManager(brk, mem, pos, allow_network=False)
+    mgr = ExitManager(brk, mem, pos, allow_network=False, cost_model=ZERO_COST)
     past = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=2))
     mgr.record_entry("SPY", "BUY", 5, 600.0, window="overnight",
                      expected_move_pct=1.0, entry_ts=past)
@@ -256,13 +287,28 @@ def test_exit_on_trailing_stop(tmp_path):
     brk = LocalPaperBroker(start_cash=10_000.0, state_dir=str(tmp_path))
     pos = OpenPositions(state_dir=str(tmp_path))
     brk.market_order("FXI", "sell", 10, 38.0)         # open a short
-    mgr = ExitManager(brk, mem, pos, allow_network=False)
+    mgr = ExitManager(brk, mem, pos, allow_network=False, cost_model=ZERO_COST)
     mgr.record_entry("FXI", "SELL", 10, 38.0, window="overnight", expected_move_pct=2.0)
     # short trail is 0.8%: best stays at the running low; a bounce above triggers
     assert mgr.check_and_exit(prices={"FXI": 37.0}) == []      # new low, no stop
     exits = mgr.check_and_exit(prices={"FXI": 37.4})           # 37.4 >= 37*1.008
     assert len(exits) == 1 and exits[0]["reason"] == "trailing_stop"
     assert "FXI" not in brk.positions()
+
+
+def test_exit_pnl_is_net_of_costs(tmp_path):
+    mem = Memory(state_dir=str(tmp_path))
+    brk = LocalPaperBroker(start_cash=10_000.0, state_dir=str(tmp_path))
+    pos = OpenPositions(state_dir=str(tmp_path))
+    brk.market_order("SPY", "buy", 5, 600.0)
+    # real (default) cost model -> realized pnl below the gross 25.0, with the
+    # gross + cost both recorded on the exit event
+    mgr = ExitManager(brk, mem, pos, allow_network=False)
+    past = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=2)
+    mgr.record_entry("SPY", "BUY", 5, 600.0, window="overnight", entry_ts=past)
+    ev = mgr.check_and_exit(prices={"SPY": 605.0})[0]
+    assert ev["gross_pnl"] == 25.0
+    assert ev["cost"] > 0 and ev["pnl"] == round(25.0 - ev["cost"], 2)
 
 
 def test_exit_reconciles_when_broker_flat(tmp_path):

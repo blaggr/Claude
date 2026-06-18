@@ -85,11 +85,16 @@ class ExitManager:
     first so it never closes a position the broker no longer shows.
     """
 
-    def __init__(self, broker, memory, positions, *, allow_network: bool = True):
+    def __init__(self, broker, memory, positions, *, allow_network: bool = True,
+                 cost_model=None):
         self.broker = broker
         self.memory = memory
         self.positions = positions
         self.allow_network = allow_network
+        if cost_model is None:
+            from .costs import CostModel
+            cost_model = CostModel.from_env()
+        self.cost_model = cost_model
 
     def record_entry(self, symbol: str, side: str, qty: int, price: float,
                      *, window: str = "intraday", expected_move_pct: float = 1.0,
@@ -156,10 +161,16 @@ class ExitManager:
                             note=fill.note)
             return None
         d = 1 if rec["side"] == "BUY" else -1
-        pnl = round(d * (fill.price - rec["entry_price"]) * qty, 2)
+        gross = d * (fill.price - rec["entry_price"]) * qty
+        # net of round-trip transaction costs (spread + slippage + short borrow)
+        hold_days = max(0.0, (ny_now() - _parse_ts(rec["entry_ts"])).total_seconds() / 86400.0)
+        cost = round(self.cost_model.round_trip_cost(
+            symbol, qty, rec["entry_price"], fill.price, rec["side"], hold_days), 2)
+        pnl = round(gross - cost, 2)
         ev = {"symbol": symbol, "exit_side": exit_side, "qty": qty,
               "entry": rec["entry_price"], "exit": fill.price, "reason": reason,
-              "pnl": pnl, "mode": getattr(self.broker, "mode", "PAPER")}
+              "gross_pnl": round(gross, 2), "cost": cost, "pnl": pnl,
+              "mode": getattr(self.broker, "mode", "PAPER")}
         self.memory.log("EXIT", **ev)
         self.positions.remove(symbol)
         self.memory.clear_position(symbol)

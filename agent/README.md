@@ -74,6 +74,45 @@ This mirrors the trailing-stop + boundary logic in
 `experiments/simulation/intraday.py`, reimplemented in pure stdlib so the agent
 package stays dependency-free.
 
+## Profitability & risk tooling
+
+Four layers exist so the system is honest about costs and disciplined about
+risk — because the calibrated edges are small-sample and fragile.
+
+**1. Transaction-cost model (`costs.py`) + cost re-score (`rescore.py`).**
+Spread, slippage, commission, and short-borrow are modeled and **subtracted from
+every realized exit P&L** (the exit event records `gross_pnl`, `cost`, and net
+`pnl`). `rescore.py` re-scores every calibrated edge net of costs so you can see
+which legs actually survive:
+```bash
+python -m agent.rescore                  # net-of-cost edge table
+python -m agent.rescore --slippage-bps 50 --json
+```
+The default run already flags ~3 of 20 calibrated legs as unprofitable after
+costs; under 50 bps of slippage, 18 of 20 flip negative. **Cheap edges die first
+to costs — this tells you which ones before you trade them.**
+
+**2. Risk-based position sizing (`sizing.py`).** Replaces flat budget sizing with
+volatility-targeting + fractional-Kelly (quarter-Kelly default), layered *under*
+the per-event budget ceiling (it only ever shrinks, with a 1-share floor). A
+**correlation-aware** check treats `SELL SPY + SELL FXI + BUY GLD` as one
+risk-off bet and shrinks correlated pile-ons instead of sizing each in isolation.
+
+**3. Live performance tracker + circuit breaker (`performance.py`).** Pairs the
+journal's exits into round-trips and computes realized win-rate / P&L / return
+per symbol with a **Wilson confidence interval**, compared to the calibrated
+prior. The circuit breaker auto-disables any symbol/topic whose live record
+underperforms (≥8 trades and Wilson-upper < 0.5); a disabled leg is flagged in
+`analyze_news` and **blocked in `place_order`**.
+```bash
+python -m agent.performance --evaluate   # per-symbol stats vs prior + breaker
+```
+
+**4. Macro surprise feed (`experiments/simulation/surprise_source.py`).** Wires a
+consensus/actual feed into the scheduled-event sim (CPI/FOMC) — releases that are
+more reliably tradable than posts. Set `MACRO_SURPRISE_FILE` to a JSON/CSV of
+consensus+actual and the sim trades them instead of only announcing.
+
 ## Run it
 
 Works with **zero dependencies, zero network, zero API key** — the offline
@@ -203,7 +242,10 @@ future returns; fees, slippage and taxes are not modeled. Not investment advice.
 | `agent.py` | the loop: `run_session()` + the exit pass + the verification step |
 | `live_agent.py` | always-on driver: exits every poll, then polls posts → one agent session each, with kill-switch / daily-loss guards |
 | `positions.py` | structured open-position store + exit plans (`state/open_positions.json`) |
-| `exits.py` | automated exits: trailing stop + hard boundary (pure-stdlib mirror of `intraday.py`) |
+| `exits.py` | automated exits: trailing stop + hard boundary (pure-stdlib mirror of `intraday.py`); nets costs into P&L |
+| `costs.py` / `rescore.py` | transaction-cost model + cost-adjusted edge re-score CLI |
+| `sizing.py` | volatility-target / fractional-Kelly sizing + correlation-aware exposure caps |
+| `performance.py` | live win-rate/P&L tracker with Wilson CIs vs the prior + auto-disable circuit breaker |
 | `llm.py` | reasoning layer — `AnthropicLLM` (Claude) and the offline `HeuristicLLM`, one `step()` contract |
 | `tools.py` | the toolbox: schemas + dispatcher, reusing the repo's engines |
 | `broker.py` | `LocalPaperBroker` (offline) and `AlpacaBroker` (risk-gated) |

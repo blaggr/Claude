@@ -153,6 +153,13 @@ class Toolbox:
             from .exits import ExitManager
             self._exits = ExitManager(broker, memory, positions,
                                       allow_network=allow_network)
+        # risk-based sizing (vol-target / fractional-Kelly + correlation caps)
+        from .sizing import PortfolioSizer
+        self._sizer = PortfolioSizer(max_notional_pct=event_budget_pct)
+        # circuit breaker: a topic/symbol whose live record underperforms its
+        # prior gets disabled, and no new order is placed on it
+        from .performance import CircuitBreaker
+        self._breaker = CircuitBreaker(state_dir=memory.dir)
 
     # -- helpers ------------------------------------------------------
     def _quote(self, symbols):
@@ -174,7 +181,14 @@ class Toolbox:
         self._last_headline = text[:160]
         for leg in plan.get("plans", []):
             self._last_plan[leg["instrument"]] = leg
-        self.memory.log("analyze_news", text=text[:200], decision=plan.get("decision"))
+        # surface any leg/topic the circuit breaker has disabled so the model
+        # sees the kill-switch before it tries to size into it
+        topic = plan.get("signal", {}).get("topic")
+        plan["disabled"] = sorted({leg["instrument"] for leg in plan.get("plans", [])
+                                   if self._breaker.is_disabled(leg["instrument"])}
+                                  | ({topic} if topic and self._breaker.is_disabled(topic) else set()))
+        self.memory.log("analyze_news", text=text[:200], decision=plan.get("decision"),
+                        disabled=plan["disabled"])
         return plan
 
     def get_quotes(self, symbols) -> dict:
@@ -190,9 +204,14 @@ class Toolbox:
         symbol = symbol.upper()
         q = self._quote([symbol])[symbol]
         price = q["price"]
-        # risk cap: a single order cannot commit more than the per-event budget
+        # circuit breaker: refuse symbols whose live record underperforms the prior
+        if self._breaker.is_disabled(symbol):
+            self.memory.log("breaker_block", symbol=symbol, requested=qty)
+            return {"symbol": symbol, "side": side, "qty": 0, "price": price,
+                    "status": "rejected", "note": "circuit breaker: symbol disabled"}
         acct = self.broker.account({symbol: price})
         equity = acct.get("equity", 0.0) or 0.0
+        # 1) hard ceiling: never commit more than the per-event budget
         max_notional = equity * self.event_budget_pct / 100.0
         if equity and qty * price > max_notional + 1e-6:
             capped = int(max_notional // price)
@@ -204,6 +223,22 @@ class Toolbox:
                         "note": f"order exceeds {self.event_budget_pct}% per-event budget; "
                                 f"max {max_notional:.2f} < one share at {price:.2f}"}
             qty = capped
+        # 2) risk-based sizing on top of the ceiling: vol-target / fractional
+        #    Kelly + correlation-aware exposure. Shrinks but never upsizes; a
+        #    tradable order keeps a 1-share floor so small ideas aren't zeroed.
+        if equity:
+            leg = self._last_plan.get(symbol, {"instrument": symbol, "side": side.upper(),
+                                               "probability": 0.55, "expected_move_pct": 1.0})
+            try:
+                risk_qty = self._sizer.size(leg, equity, price, self.broker.positions())
+            except Exception as exc:
+                self.memory.log("WARN", note=f"sizer failed for {symbol}: {exc}")
+                risk_qty = qty
+            sized = min(qty, max(int(risk_qty), 1))
+            if sized != qty:
+                self.memory.log("risk_size", symbol=symbol, ceiling_qty=qty,
+                                risk_qty=int(risk_qty), final=sized)
+                qty = sized
         fill: Fill = self.broker.market_order(symbol, side, qty, price)
         rec = fill.to_dict()
         rec["mode"] = getattr(self.broker, "mode", "PAPER")
