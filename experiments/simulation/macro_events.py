@@ -97,9 +97,17 @@ class FileSurpriseSource:
 
 
 def default_source() -> SurpriseSource:
-    """FileSurpriseSource only if MACRO_SURPRISE_FILE is set; else Null."""
+    """FileSurpriseSource only if MACRO_SURPRISE_FILE is set; else Null.
+    Prefers the richer consensus+actual / CSV-aware source from
+    surprise_source.py when available, falling back to the inline reader."""
     p = os.environ.get("MACRO_SURPRISE_FILE")
-    return FileSurpriseSource(p) if p else NullSurpriseSource()
+    if not p:
+        return NullSurpriseSource()
+    try:
+        from surprise_source import FileSurpriseSource as RichFileSurpriseSource
+        return RichFileSurpriseSource(p)
+    except Exception:
+        return FileSurpriseSource(p)
 
 
 # ------------------------------------------------------------- event logic
