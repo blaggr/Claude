@@ -1,0 +1,2 @@
+# Never commit the filled-in env file (real keys). The .example is tracked.
+agent.env

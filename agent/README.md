@@ -90,6 +90,36 @@ never double-trades. Continuous mode additionally needs `pandas`
 > exits, `experiments/live/live_trader.py` is the deterministic worker that does
 > both. Use `live_agent` when you want the LLM in the decision loop.
 
+## Run it unattended (auto-restart)
+
+Ready-made supervisors live in [`deploy/`](deploy/) so the driver survives
+logout and restarts on crash. Both are **paper only** (neither sets
+`ALPACA_LIVE`). Put your secrets in `deploy/agent.env` first
+(`cp deploy/agent.env.example deploy/agent.env`, fill in, `chmod 600`).
+
+**systemd (Linux, starts on boot):**
+```bash
+# edit User / WorkingDirectory / secrets in the unit first
+sudo cp agent/deploy/trading-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now trading-agent
+journalctl -u trading-agent -f          # watch it
+```
+
+**tmux (macOS / no systemd / quick VPS run):**
+```bash
+set -a; source agent/deploy/agent.env; set +a   # load secrets
+./agent/deploy/run_tmux.sh start         # detached, auto-restarting
+./agent/deploy/run_tmux.sh attach        # watch (Ctrl-b d to detach)
+./agent/deploy/run_tmux.sh kill          # flatten everything + stop
+```
+
+Both restart **only on crash**; a clean exit or a tripped kill switch ends the
+loop and stays stopped (so a daily-loss halt isn't immediately undone). The
+kill switch is the same file the rest of the system uses —
+`touch experiments/live/KILL` flattens and halts on the next poll; delete it to
+resume.
+
 ### Upgraded paths (optional, all auto-detected)
 
 - **Reasoning with Claude** — set `ANTHROPIC_API_KEY` (and `pip install
@@ -142,6 +172,7 @@ future returns; fees, slippage and taxes are not modeled. Not investment advice.
 | `marketdata.py` | price snapshots: live → delayed → offline stub |
 | `memory.py` | journal + distilled working memory |
 | `run.py` | CLI |
+| `deploy/` | unattended runners: `trading-agent.service` (systemd), `run_tmux.sh`, `agent.env.example` |
 | `tests/test_agent.py` | offline tests for the loop, broker, risk cap, memory, verification |
 
 ## Tests

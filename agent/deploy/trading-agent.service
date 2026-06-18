@@ -1,0 +1,53 @@
+# systemd unit for the always-on agent driver (Linux).
+#
+# Runs `python -m agent.live_agent` unattended, restarts on crash, and starts on
+# boot. PAPER trading only (no ALPACA_LIVE here on purpose).
+#
+# Install:
+#   1. Edit the User, WorkingDirectory, and the three secrets below.
+#   2. sudo cp deploy/trading-agent.service /etc/systemd/system/
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now trading-agent
+#
+# Watch it:        journalctl -u trading-agent -f
+# Stop it:         sudo systemctl stop trading-agent
+# Kill + flatten:  touch <WorkingDirectory>/experiments/live/KILL   (then stop)
+#
+# Tip: keep secrets out of this file by using EnvironmentFile= instead of
+# Environment= (see the commented line) and chmod 600 that file.
+
+[Unit]
+Description=AI trading agent — always-on paper driver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=CHANGE_ME
+WorkingDirectory=/home/CHANGE_ME/Claude
+
+# --- secrets: either set them inline here, or use EnvironmentFile (preferred) ---
+Environment=ALPACA_KEY_ID=PK_CHANGE_ME
+Environment=ALPACA_SECRET_KEY=CHANGE_ME
+Environment=ANTHROPIC_API_KEY=sk-ant-CHANGE_ME
+# EnvironmentFile=/home/CHANGE_ME/Claude/deploy/agent.env
+
+# Risk knobs (optional; these are the defaults)
+Environment=EVENT_BUDGET_PCT=10
+Environment=MAX_DAILY_LOSS_PCT=5
+Environment=POLL_SECONDS=60
+
+ExecStart=/usr/bin/env python3 -m agent.live_agent --interval 60 --budget-pct 10
+
+# auto-restart on crash, but back off so a hard failure doesn't hot-loop
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# stdout/stderr -> journald (view with `journalctl -u trading-agent -f`)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
