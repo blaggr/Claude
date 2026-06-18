@@ -20,7 +20,7 @@ db/            build_db.py builds db/cww.db from the CSVs (deterministic)
 agent/         AGENT_PLAYBOOK.md (how the autonomous agent runs) + helper scripts + update_log.md
 docs/          DATA_SOURCES.md, EXPANSION_OPTIONS.md (other public data we can add), COVERAGE.md
 mirror/        to_notion.py / to_sheets.py (push the repo data to Notion/Sheets for viewing)
-.github/       workflows/cww-refresh.yml (scheduled autonomous refresh + always-on validation)
+(repo root) .github/workflows/cww-refresh.yml (scheduled refresh + always-on validation; path-scoped to this project)
 ```
 
 ## Data model (why it's shaped this way)
@@ -41,7 +41,7 @@ sqlite3 db/cww.db "SELECT state, value_numeric FROM metrics_latest
 ```
 
 ## How it stays current ("the agent")
-A scheduled GitHub Action (`.github/workflows/cww-refresh.yml`) launches a
+A scheduled GitHub Action (`.github/workflows/cww-refresh.yml`, repo root) launches a
 Claude Code session that follows `agent/AGENT_PLAYBOOK.md`: pick the stalest
 agencies → research via web tools → append **cited** rows → validate → rebuild →
 refresh coverage → open a draft PR for review. Prime directive: **never

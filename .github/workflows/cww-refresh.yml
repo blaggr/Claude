@@ -1,17 +1,24 @@
 name: CWW Database Refresh
 
-# Autonomous refresh of the Child Welfare Workforce Database.
+# Autonomous refresh + validation for the Child Welfare Workforce Database.
 #
-# This workflow is the "continuous" engine. On a schedule it launches a
-# Claude Code session that reads agent/AGENT_PLAYBOOK.md and executes one
-# refresh cycle: pick the stalest agencies, research them via web tools,
-# append cited rows to data/metrics.csv, rebuild the DB, regenerate coverage,
-# and open/update a draft PR for human review.
+# Lives at the repo root (the only place GitHub Actions executes workflows) but
+# is scoped to the child-welfare-workforce/ project via path filters and
+# working-directory, so it never interferes with other projects in this repo.
 #
-# Requires repo secret ANTHROPIC_API_KEY (or a Claude Code OAuth token).
-# The data-validation job runs on every push/PR with no secrets needed.
+# - validate: runs on every push/PR that touches the project — the DB must build
+#   and pass provenance/units/key validation. No secrets needed.
+# - refresh: scheduled autonomous gathering cycle (and manual dispatch). Launches
+#   a Claude Code session that follows agent/AGENT_PLAYBOOK.md and opens a draft
+#   PR with cited changes. Requires repo secret ANTHROPIC_API_KEY.
 
 on:
+  push:
+    paths:
+      - "child-welfare-workforce/**"
+  pull_request:
+    paths:
+      - "child-welfare-workforce/**"
   schedule:
     - cron: "0 9 * * 1"   # every Monday 09:00 UTC
   workflow_dispatch:
@@ -39,6 +46,7 @@ jobs:
         run: |
           python db/build_db.py --check
           python db/build_db.py
+          python agent/coverage_report.py
       - name: Upload built database
         uses: actions/upload-artifact@v4
         with:
@@ -68,5 +76,5 @@ jobs:
             DB, regenerate docs/COVERAGE.md, append to agent/update_log.md, then
             commit on branch claude/cww-refresh-${{ github.run_id }} and open a
             DRAFT pull request summarizing what changed.
-        # If the action is unavailable, this step can be replaced with a
-        # `claude -p "<prompt>"` CLI invocation; see agent/README for details.
+        # If the action is unavailable, replace with a `claude -p "<prompt>"`
+        # CLI invocation; see agent/AGENT_PLAYBOOK.md.
