@@ -4,17 +4,19 @@
 # boot. PAPER trading only (no ALPACA_LIVE here on purpose).
 #
 # Install:
-#   1. Edit the User, WorkingDirectory, and the three secrets below.
-#   2. sudo cp deploy/trading-agent.service /etc/systemd/system/
-#   3. sudo systemctl daemon-reload
-#   4. sudo systemctl enable --now trading-agent
+#   1. cp agent/deploy/agent.env.example agent/deploy/agent.env, fill it in, chmod 600.
+#   2. Edit User, WorkingDirectory, and EnvironmentFile path below.
+#   3. sudo cp agent/deploy/trading-agent.service /etc/systemd/system/
+#   4. sudo systemctl daemon-reload
+#   5. sudo systemctl enable --now trading-agent
 #
 # Watch it:        journalctl -u trading-agent -f
 # Stop it:         sudo systemctl stop trading-agent
 # Kill + flatten:  touch <WorkingDirectory>/experiments/live/KILL   (then stop)
 #
-# Tip: keep secrets out of this file by using EnvironmentFile= instead of
-# Environment= (see the commented line) and chmod 600 that file.
+# ExecStartPre runs the preflight: the service will NOT start unless the broker
+# resolves to Alpaca PAPER (keys present, deps installed) — so a misconfig fails
+# fast instead of silently trading a fake local account.
 
 [Unit]
 Description=AI trading agent — always-on paper driver
@@ -26,17 +28,19 @@ Type=simple
 User=CHANGE_ME
 WorkingDirectory=/home/CHANGE_ME/Claude
 
-# --- secrets: either set them inline here, or use EnvironmentFile (preferred) ---
-Environment=ALPACA_KEY_ID=PK_CHANGE_ME
-Environment=ALPACA_SECRET_KEY=CHANGE_ME
-Environment=ANTHROPIC_API_KEY=sk-ant-CHANGE_ME
-# EnvironmentFile=/home/CHANGE_ME/Claude/deploy/agent.env
+# --- secrets: prefer EnvironmentFile (chmod 600) over inline Environment= ---
+EnvironmentFile=/home/CHANGE_ME/Claude/agent/deploy/agent.env
+# Environment=ALPACA_KEY_ID=PK_CHANGE_ME
+# Environment=ALPACA_SECRET_KEY=CHANGE_ME
+# Environment=ANTHROPIC_API_KEY=sk-ant-CHANGE_ME
 
 # Risk knobs (optional; these are the defaults)
 Environment=EVENT_BUDGET_PCT=10
 Environment=MAX_DAILY_LOSS_PCT=5
 Environment=POLL_SECONDS=60
 
+# refuse to start unless the broker resolves to Alpaca PAPER
+ExecStartPre=/usr/bin/env bash agent/deploy/run_tmux.sh preflight
 ExecStart=/usr/bin/env python3 -m agent.live_agent --interval 60 --budget-pct 10
 
 # auto-restart on crash, but back off so a hard failure doesn't hot-loop
