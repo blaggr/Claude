@@ -93,6 +93,34 @@ TOOL_SCHEMAS = [
         },
     },
     {
+        "name": "get_open_positions",
+        "description": "List the agent's tracked open positions with their exit plans: "
+                       "entry, side, the calibrated exit window, trailing-stop distance, "
+                       "and the hard boundary timestamp.",
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "check_exits",
+        "description": "Run the deterministic exit check now: flatten any tracked position "
+                       "that has hit its trailing stop or its hard boundary. Returns the "
+                       "exits taken. Safe to call every cycle.",
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "close_position",
+        "description": "Immediately flatten one tracked position regardless of its stop "
+                       "(e.g. the thesis is invalidated). PAPER unless live is armed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string"},
+                "reason": {"type": "string"},
+            },
+            "required": ["symbol"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "remember",
         "description": "Persist a durable lesson to working memory for future sessions. "
                        "Keep it one short, general sentence.",
@@ -110,13 +138,21 @@ class Toolbox:
     """Binds the tool callables to a broker + memory + risk caps for one agent run."""
 
     def __init__(self, broker, memory: Memory, *, regime: str = "in_office",
-                 event_budget_pct: float = 25.0, allow_network: bool = True):
+                 event_budget_pct: float = 25.0, allow_network: bool = True,
+                 positions=None):
         self.broker = broker
         self.memory = memory
         self.regime = regime
         self.event_budget_pct = event_budget_pct
         self.allow_network = allow_network
+        self.positions = positions          # OpenPositions store (optional)
         self._quote_cache: dict[str, float] = {}
+        self._last_plan: dict[str, dict] = {}   # instrument -> calibrated leg
+        self._exits = None
+        if positions is not None:
+            from .exits import ExitManager
+            self._exits = ExitManager(broker, memory, positions,
+                                      allow_network=allow_network)
 
     # -- helpers ------------------------------------------------------
     def _quote(self, symbols):
@@ -133,6 +169,11 @@ class Toolbox:
                      base_qty: int = 10) -> dict:
         plan = nte.plan_trade(text, base_qty, regime or self.regime,
                               classify_fn=nte.classify)
+        # remember each leg's exit plan so place_order can set the right
+        # trailing stop / boundary when the agent acts on it
+        self._last_headline = text[:160]
+        for leg in plan.get("plans", []):
+            self._last_plan[leg["instrument"]] = leg
         self.memory.log("analyze_news", text=text[:200], decision=plan.get("decision"))
         return plan
 
@@ -172,8 +213,57 @@ class Toolbox:
             # net the position note: a flatten clears it, otherwise record it
             if symbol in self.broker.positions():
                 self.memory.set_position(symbol, note)
+                self._record_exit_plan(symbol, side, fill.qty, fill.price)
             else:
                 self.memory.clear_position(symbol)
+                if self.positions is not None:
+                    self.positions.remove(symbol)
+        return rec
+
+    def _record_exit_plan(self, symbol: str, side: str, qty: int, price: float) -> None:
+        """Register the freshly-opened position with the exit manager, deriving
+        the window + trail from the calibrated leg analyze_news produced."""
+        if self._exits is None:
+            return
+        leg = self._last_plan.get(symbol, {})
+        window = leg.get("window", "intraday")
+        exp_move = abs(leg.get("expected_move_pct", 1.0)) or 1.0
+        self._exits.record_entry(symbol, side, qty, price, window=window,
+                                 expected_move_pct=exp_move,
+                                 headline=getattr(self, "_last_headline", ""))
+
+    def get_open_positions(self) -> dict:
+        """Tracked open positions with their exit plans (window, trailing stop,
+        hard boundary)."""
+        if self.positions is None:
+            return {"positions": {}, "note": "no exit tracking configured"}
+        return {"positions": self.positions.all()}
+
+    def check_exits(self) -> dict:
+        """Run the deterministic exit check now; flatten any position that has
+        hit its trailing stop or boundary. Returns the exits taken."""
+        if self._exits is None:
+            return {"exits": [], "note": "no exit tracking configured"}
+        return {"exits": self._exits.check_and_exit()}
+
+    def close_position(self, symbol: str, reason: str = "manual") -> dict:
+        """Flatten one tracked position immediately, regardless of its stop."""
+        symbol = symbol.upper()
+        held = self.broker.positions().get(symbol)
+        if not held:
+            if self.positions is not None:
+                self.positions.remove(symbol)
+            return {"status": "flat", "symbol": symbol}
+        price = self._quote([symbol])[symbol]["price"]
+        side = "sell" if held["qty"] > 0 else "buy"
+        fill = self.broker.market_order(symbol, side, abs(int(held["qty"])), price)
+        rec = fill.to_dict()
+        rec["mode"] = getattr(self.broker, "mode", "PAPER")
+        self.memory.log("close_position", reason=reason, **rec)
+        if fill.status == "filled":
+            self.memory.clear_position(symbol)
+            if self.positions is not None:
+                self.positions.remove(symbol)
         return rec
 
     def remember(self, lesson: str) -> dict:
@@ -188,6 +278,9 @@ class Toolbox:
             "get_quotes": self.get_quotes,
             "get_portfolio": self.get_portfolio,
             "place_order": self.place_order,
+            "get_open_positions": self.get_open_positions,
+            "check_exits": self.check_exits,
+            "close_position": self.close_position,
             "remember": self.remember,
         }.get(name)
         if fn is None:

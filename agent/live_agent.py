@@ -45,7 +45,9 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(HERE))
 from agent.agent import run_session  # noqa: E402
 from agent.broker import get_broker  # noqa: E402
+from agent.exits import ExitManager  # noqa: E402
 from agent.memory import Memory  # noqa: E402
+from agent.positions import OpenPositions  # noqa: E402
 
 STATE_PATH = os.path.join(HERE, "state", "live_agent_state.json")
 
@@ -92,12 +94,23 @@ def is_market_relevant(text: str) -> bool:
 def poll_once(broker, memory: Memory, state: dict, *, fetch_fn=_default_fetch,
               lookback_min: int = 90, regime: str = "in_office",
               event_budget_pct: float | None = None, min_confidence: str = "medium",
-              allow_network: bool = True, llm=None, verbose: bool = False) -> list:
-    """Process all new market-relevant posts in the lookback window.
+              allow_network: bool = True, llm=None, positions=None,
+              verbose: bool = False) -> list:
+    """Process exits, then all new market-relevant posts in the lookback window.
 
     Returns the list of AgentResult for the sessions that were run this pass.
     ``llm`` is normally None so run_session builds a fresh reasoner per session
     (the offline policy is stateful and must not be shared across sessions)."""
+    # automated exits run EVERY poll, before any entry and even with no new
+    # posts — a position decays on its own clock, not on the news cycle.
+    positions = positions if positions is not None else OpenPositions()
+    exit_mgr = ExitManager(broker, memory, positions, allow_network=allow_network)
+    taken = exit_mgr.check_and_exit()
+    if taken and verbose:
+        for e in taken:
+            print(f"[live_agent] exit {e['exit_side']} {e['qty']} {e['symbol']} "
+                  f"@ {e['exit']} ({e['reason']}, pnl {e['pnl']})")
+
     since = _now() - dt.timedelta(minutes=lookback_min)
     processed = set(state["processed_ids"])
     results = []
@@ -115,7 +128,8 @@ def poll_once(broker, memory: Memory, state: dict, *, fetch_fn=_default_fetch,
             print(f"[live_agent] session on post {pid}: {text[:100]}")
         res = run_session(news=[text], regime=regime, broker=broker, memory=memory,
                           event_budget_pct=event_budget_pct, min_confidence=min_confidence,
-                          allow_network=allow_network, llm=llm, verbose=verbose)
+                          allow_network=allow_network, llm=llm, positions=positions,
+                          verbose=verbose)
         memory.log("live_session", post_id=pid, orders=len(res.orders),
                    filled=sum(1 for o in res.orders if o.get("status") == "filled"))
         results.append(res)
@@ -158,6 +172,7 @@ def run_forever(*, interval: int = 30, once: bool = False, **poll_kwargs) -> int
     memory = Memory()
     risk = _load_risk()
     state = load_state()
+    poll_kwargs.setdefault("positions", OpenPositions())   # shared across polls
     mode = getattr(broker, "mode", "PAPER")
     memory.log("live_agent_start", mode=mode, interval=interval,
                broker=broker.__class__.__name__)

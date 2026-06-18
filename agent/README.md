@@ -34,11 +34,45 @@ the loop. This module is that agent.
    | `get_quotes` | price snapshot (live → delayed → offline stub) | `marketdata.py` |
    | `get_portfolio` | equity, cash, positions | `broker.py` |
    | `place_order` | **paper** whole-share market order, risk-capped | `broker.py` + `experiments/live/risk.py` |
+   | `get_open_positions` / `check_exits` / `close_position` | inspect / run / force exits | `positions.py` + `exits.py` |
    | `remember` | persist a durable lesson | `memory.py` |
 4. **VERIFY** — reconcile the orders the agent *intended* against the broker's
    actual positions, and journal the result. An agent that never checks its own
    work is the failure mode the article warns about; this step closes the loop.
 5. **REMEMBER** — write one durable lesson and update open-position notes.
+
+Before any of that, every session and every live poll first runs an
+**automated exit check** (see below).
+
+## Automated exits
+
+The calibrated edges are overnight/intraday — the move is priced by the next
+cash open and does not continue — so holding past the window gives the edge
+back. Every position the agent opens is therefore registered with an exit plan
+and closed automatically by whichever fires first:
+
+- **Trailing stop** — impulse decay. A long trails below its running high, a
+  short above its running low; once price gives back the trail distance
+  (40% of the calibrated move, floored 0.3% / capped 1.5%), it flattens.
+- **Hard boundary** — time. Anchored to the entry: a pre-cash entry exits at
+  09:30 ET, an RTH entry by 15:55 ET, an after-hours/weekend entry at the next
+  session's 09:30 ET.
+
+The exit check is **deterministic and LLM-free** (exits are mechanical risk
+management, not a decision to deliberate) and runs:
+
+- at the **start of every `run_session`**, before any new entry, and
+- **every poll** of `live_agent` — even with no new posts, because a position
+  decays on its own clock, not the news cycle.
+
+It reconciles against the broker first, so it never tries to close a position
+the broker no longer shows. Open positions and their plans live in
+`state/open_positions.json`. The agent also has `get_open_positions`,
+`check_exits`, and `close_position` tools if you want the model to inspect or
+force an exit, but it never has to — the automated check is the safety net.
+This mirrors the trailing-stop + boundary logic in
+`experiments/simulation/intraday.py`, reimplemented in pure stdlib so the agent
+package stays dependency-free.
 
 ## Run it
 
@@ -79,16 +113,18 @@ python -m agent.live_agent --once -v
 ```
 
 Each poll: **safety check** (kill switch flattens & halts; a daily-loss breach
-trips the kill switch) → fetch recent posts → **cheap keyword pre-filter** so a
-reasoning turn isn't spent on "great dinner last night" → one agent session per
-genuinely new, market-relevant post → persist processed-post ids so a restart
-never double-trades. Continuous mode additionally needs `pandas`
-(`pip install pandas`); the single-shot `agent.run` does not.
+trips the kill switch) → **automated exit check** (flatten any position that hit
+its trailing stop or boundary — runs even with no new posts) → fetch recent
+posts → **cheap keyword pre-filter** so a reasoning turn isn't spent on "great
+dinner last night" → one agent session per genuinely new, market-relevant post →
+persist processed-post ids so a restart never double-trades. Continuous mode
+additionally needs `pandas` (`pip install pandas`); the single-shot `agent.run`
+does not.
 
-> Scope: the agent decides *entries* and verifies them; it does not run the
-> trailing-stop exit lifecycle. If you want fully automated entries **and**
-> exits, `experiments/live/live_trader.py` is the deterministic worker that does
-> both. Use `live_agent` when you want the LLM in the decision loop.
+> Scope: `live_agent` now handles **both** entries (LLM-decided) and exits
+> (automated trailing stop + boundary, see above). `experiments/live/live_trader.py`
+> remains as the fully-deterministic, no-LLM alternative if you don't want a
+> model in the entry decision.
 
 ## Run it unattended (auto-restart)
 
@@ -164,8 +200,10 @@ future returns; fees, slippage and taxes are not modeled. Not investment advice.
 
 | File | Role |
 |------|------|
-| `agent.py` | the loop: `run_session()` + the verification step |
-| `live_agent.py` | always-on driver: polls posts → one agent session each, with kill-switch / daily-loss guards |
+| `agent.py` | the loop: `run_session()` + the exit pass + the verification step |
+| `live_agent.py` | always-on driver: exits every poll, then polls posts → one agent session each, with kill-switch / daily-loss guards |
+| `positions.py` | structured open-position store + exit plans (`state/open_positions.json`) |
+| `exits.py` | automated exits: trailing stop + hard boundary (pure-stdlib mirror of `intraday.py`) |
 | `llm.py` | reasoning layer — `AnthropicLLM` (Claude) and the offline `HeuristicLLM`, one `step()` contract |
 | `tools.py` | the toolbox: schemas + dispatcher, reusing the repo's engines |
 | `broker.py` | `LocalPaperBroker` (offline) and `AlpacaBroker` (risk-gated) |
@@ -173,7 +211,7 @@ future returns; fees, slippage and taxes are not modeled. Not investment advice.
 | `memory.py` | journal + distilled working memory |
 | `run.py` | CLI |
 | `deploy/` | unattended runners: `trading-agent.service` (systemd), `run_tmux.sh`, `agent.env.example` |
-| `tests/test_agent.py` | offline tests for the loop, broker, risk cap, memory, verification |
+| `tests/test_agent.py` | offline tests for the loop, broker, risk cap, memory, verification, and automated exits |
 
 ## Tests
 
