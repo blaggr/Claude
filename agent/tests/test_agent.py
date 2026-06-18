@@ -152,3 +152,48 @@ def test_scripted_llm_drives_loop(fresh):
     filled = [o for o in res.orders if o.get("status") == "filled"]
     assert filled and filled[0]["symbol"] == "GLD"
     assert brk.positions()["GLD"]["qty"] == 2
+
+
+# ---------------------------------------------------------------- budget flag
+def test_run_session_budget_pct_threads_through(fresh):
+    mem, brk = fresh
+    # 10% of 10k = 1000; at stub SPY 600 -> max 1 share even though plan asks for 10
+    res = run_session(news=[ESCALATION], llm=HeuristicLLM(), broker=brk, memory=mem,
+                      allow_network=False, event_budget_pct=10.0)
+    filled = [o for o in res.orders if o.get("status") == "filled"]
+    assert filled and filled[0]["symbol"] == "SPY"
+    assert filled[0]["qty"] == 1  # capped by the 10% budget
+
+
+# ---------------------------------------------------------------- live agent
+def test_live_agent_poll_processes_relevant_post(fresh):
+    from agent import live_agent
+    mem, brk = fresh
+    posts = [
+        {"id": "p1", "ts": "2026-06-18T13:00:00+00:00", "text": ESCALATION},
+        {"id": "p2", "ts": "2026-06-18T13:01:00+00:00", "text": NOISE},
+    ]
+    state = {"processed_ids": [], "day": None, "day_start_equity": None}
+    results = live_agent.poll_once(brk, mem, state, fetch_fn=lambda since: posts,
+                                   allow_network=False,
+                                   llm=None if False else HeuristicLLM())
+    # only the market-relevant post ran a session; both are marked processed
+    assert len(results) == 1
+    assert set(state["processed_ids"]) == {"p1", "p2"}
+    assert brk.positions()  # the escalation post opened a paper position
+
+
+def test_live_agent_skips_already_processed(fresh):
+    from agent import live_agent
+    mem, brk = fresh
+    posts = [{"id": "p1", "ts": "2026-06-18T13:00:00+00:00", "text": ESCALATION}]
+    state = {"processed_ids": ["p1"], "day": None, "day_start_equity": None}
+    results = live_agent.poll_once(brk, mem, state, fetch_fn=lambda since: posts,
+                                   allow_network=False, llm=HeuristicLLM())
+    assert results == [] and brk.positions() == {}
+
+
+def test_market_relevance_gate():
+    from agent import live_agent
+    assert live_agent.is_market_relevant(ESCALATION)
+    assert not live_agent.is_market_relevant(NOISE)

@@ -37,6 +37,9 @@ def main(argv=None) -> int:
     ap.add_argument("--regime", choices=["in_office", "out_office"], default="in_office")
     ap.add_argument("--min-confidence", choices=["low", "medium", "high"], default="medium",
                     help="Offline policy: lowest leg confidence it will trade.")
+    ap.add_argument("--budget-pct", type=float, default=None,
+                    help="Max %% of equity a single order may commit "
+                         "(default: EVENT_BUDGET_PCT env, else 25).")
     ap.add_argument("--max-steps", type=int, default=10)
     ap.add_argument("--offline", action="store_true",
                     help="Force the offline heuristic policy (no API, no network).")
@@ -66,7 +69,8 @@ def main(argv=None) -> int:
     res = run_session(objective=objective, news=news, regime=args.regime,
                       max_steps=args.max_steps, llm=llm,
                       allow_network=args_allow_net,
-                      min_confidence=args.min_confidence, verbose=args.verbose)
+                      min_confidence=args.min_confidence,
+                      event_budget_pct=args.budget_pct, verbose=args.verbose)
     print("\n" + "=" * 72)
     print(res.summary())
     print("=" * 72)

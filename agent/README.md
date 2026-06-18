@@ -56,9 +56,39 @@ python -m agent.run --news "BREAKING: ADDITIONAL 100% TARIFF on China!" \
 # out-of-office regime, only trade high-confidence legs
 python -m agent.run --news "..." --regime out_office --min-confidence high
 
+# cap any single order at 10% of equity (overrides EVENT_BUDGET_PCT)
+python -m agent.run --news "..." --budget-pct 10
+
 # inspect what the agent remembers
 python -m agent.run --show-memory
 ```
+
+## Run it continuously (always-on)
+
+`live_agent.py` is the always-on driver: it polls Truth Social and hands every
+new *market-relevant* post to the agent loop, so the agent runs continuously
+against your paper account. It reuses the post-fetch stack from `experiments/`
+and the same KILL-switch / daily-loss interlocks as the existing worker.
+
+```bash
+# poll forever (needs Alpaca paper keys + pandas; Claude key recommended)
+python -m agent.live_agent --interval 60 --budget-pct 10 -v
+
+# single pass then exit (good for cron, or a smoke test)
+python -m agent.live_agent --once -v
+```
+
+Each poll: **safety check** (kill switch flattens & halts; a daily-loss breach
+trips the kill switch) → fetch recent posts → **cheap keyword pre-filter** so a
+reasoning turn isn't spent on "great dinner last night" → one agent session per
+genuinely new, market-relevant post → persist processed-post ids so a restart
+never double-trades. Continuous mode additionally needs `pandas`
+(`pip install pandas`); the single-shot `agent.run` does not.
+
+> Scope: the agent decides *entries* and verifies them; it does not run the
+> trailing-stop exit lifecycle. If you want fully automated entries **and**
+> exits, `experiments/live/live_trader.py` is the deterministic worker that does
+> both. Use `live_agent` when you want the LLM in the decision loop.
 
 ### Upgraded paths (optional, all auto-detected)
 
@@ -91,7 +121,8 @@ up next run.
   offline paper account; the Alpaca backend is paper unless the double interlock
   is armed.
 - **Per-event budget cap.** A single order can't commit more than 25% of equity
-  (configurable); the toolbox silently caps the size and journals it.
+  (default; set with `--budget-pct` or `EVENT_BUDGET_PCT`); the toolbox silently
+  caps the size and journals it.
 - **Calibration honesty.** Edges come from small-sample event studies
   (6–29 events); the agent treats probabilities as priors and is told to stand
   pat when there's no confident, calibrated edge.
@@ -104,6 +135,7 @@ future returns; fees, slippage and taxes are not modeled. Not investment advice.
 | File | Role |
 |------|------|
 | `agent.py` | the loop: `run_session()` + the verification step |
+| `live_agent.py` | always-on driver: polls posts → one agent session each, with kill-switch / daily-loss guards |
 | `llm.py` | reasoning layer — `AnthropicLLM` (Claude) and the offline `HeuristicLLM`, one `step()` contract |
 | `tools.py` | the toolbox: schemas + dispatcher, reusing the repo's engines |
 | `broker.py` | `LocalPaperBroker` (offline) and `AlpacaBroker` (risk-gated) |

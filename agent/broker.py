@@ -89,6 +89,17 @@ class LocalPaperBroker:
     def positions(self) -> dict:
         return dict(self._s["positions"])
 
+    def flatten_all(self, prices: dict[str, float] | None = None) -> None:
+        """Close every position at the supplied (or last-avg) price, booking P&L
+        into cash. Used by the always-on kill switch."""
+        prices = prices or {}
+        for sym, pos in list(self._s["positions"].items()):
+            px = prices.get(sym, pos["avg"])
+            # buying back a short costs cash; selling a long raises it
+            self._s["cash"] += pos["qty"] * px
+        self._s["positions"] = {}
+        self._save()
+
     def account(self, prices: dict[str, float] | None = None) -> dict:
         prices = prices or {}
         mkt = 0.0
@@ -132,6 +143,9 @@ class AlpacaBroker:
         for p in self.api.positions():
             out[p["symbol"]] = {"qty": int(float(p["qty"])), "avg": float(p["avg_entry_price"])}
         return out
+
+    def flatten_all(self, prices: dict | None = None) -> None:
+        self.api.flatten_all()
 
     def account(self, prices: dict | None = None) -> dict:
         a = self.api.account()

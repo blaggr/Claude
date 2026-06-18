@@ -17,6 +17,7 @@ HeuristicLLM drives the same tools, so this runs anywhere.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 
 from .broker import get_broker
@@ -103,6 +104,7 @@ def run_session(objective: str = "Review the latest news and trade only a "
                 *, regime: str = "in_office", max_steps: int = 10,
                 llm=None, broker=None, memory: Memory | None = None,
                 allow_network: bool = True, min_confidence: str = "medium",
+                event_budget_pct: float | None = None,
                 verbose: bool = False) -> AgentResult:
     """Run one full agent session and return the result.
 
@@ -110,10 +112,15 @@ def run_session(objective: str = "Review the latest news and trade only a "
           with no fresh item (it will typically stand pat).
     llm:  an object with .step(); defaults to Claude when a key is present,
           else the offline HeuristicLLM.
+    event_budget_pct: max % of equity one order may commit. None -> the
+          EVENT_BUDGET_PCT env var, else 25.
     """
     memory = memory or Memory()
     broker = broker or get_broker()
-    toolbox = Toolbox(broker, memory, regime=regime, allow_network=allow_network)
+    if event_budget_pct is None:
+        event_budget_pct = float(os.environ.get("EVENT_BUDGET_PCT", "25"))
+    toolbox = Toolbox(broker, memory, regime=regime, allow_network=allow_network,
+                      event_budget_pct=event_budget_pct)
     news = news or []
 
     if llm is None:

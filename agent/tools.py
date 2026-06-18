@@ -158,7 +158,8 @@ class Toolbox:
             self.memory.log("risk_cap", symbol=symbol, requested=qty, capped=capped,
                             reason=f"{self.event_budget_pct}% per-event budget")
             if capped < 1:
-                return {"status": "rejected",
+                return {"symbol": symbol, "side": side, "qty": 0, "price": price,
+                        "status": "rejected",
                         "note": f"order exceeds {self.event_budget_pct}% per-event budget; "
                                 f"max {max_notional:.2f} < one share at {price:.2f}"}
             qty = capped
