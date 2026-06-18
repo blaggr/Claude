@@ -1,0 +1,9 @@
+# The single-shot agent (python -m agent.run) runs fully offline with zero
+# dependencies (stdlib only). These are optional and only activate the
+# corresponding upgraded paths:
+anthropic>=0.40    # reasoning with Claude (else the offline heuristic policy drives the loop)
+yfinance>=0.2      # delayed quotes (else live Alpaca IEX, else the offline price stub)
+
+# The always-on driver (python -m agent.live_agent) additionally needs the
+# post-fetch stack it shares with experiments/ (Truth Social scanning):
+pandas>=2.0        # required by experiments/simulation/daily_sim.fetch_posts_since
