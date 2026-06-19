@@ -4,3 +4,6 @@ memory.md
 paper_account.json
 open_positions.json
 live_agent_state.json
+disabled.json
+heartbeat
+live_agent.log
