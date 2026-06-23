@@ -1,0 +1,16 @@
+# Node
+node_modules
+dist
+dist-ssr
+*.local
+
+# Vite/Tauri
+.vite
+
+# Rust / Tauri
+src-tauri/target
+src-tauri/gen
+
+# Logs / OS
+*.log
+.DS_Store
