@@ -1,61 +1,9 @@
 {
-  "bankroll": 99.7367,
+  "bankroll": 98.9683,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [
-    {
-      "post_id": "116802765132974094",
-      "post_ts": "2026-06-24T02:39:15.117000+00:00",
-      "headline": "So, I have Iran on the \"ropes,\" ready to go down for the fall, willing to give us practically anything, and for the first time in decades, respecting the hell out of the United States and its Presiden",
-      "signal": {
-        "topic": "geopolitics_conflict",
-        "valence": -1.0,
-        "intensity": 3.0,
-        "matched": [
-          "Iran",
-          "poorly timed and meaningless War Powers Act Vote",
-          "Number One Sponser of Terror",
-          "made my job more difficult",
-          "one way or the other"
-        ]
-      },
-      "legs": [
-        {
-          "instrument": "USO",
-          "side": "BUY",
-          "weight": 0.5468,
-          "probability": 0.83,
-          "expected_move_pct": 3.0,
-          "trail_pct": 0.012000000000000002
-        },
-        {
-          "instrument": "GLD",
-          "side": "BUY",
-          "weight": 0.2187,
-          "probability": 0.83,
-          "expected_move_pct": 1.2,
-          "trail_pct": 0.0048
-        },
-        {
-          "instrument": "SPY",
-          "side": "SELL",
-          "weight": 0.164,
-          "probability": 0.83,
-          "expected_move_pct": -0.9,
-          "trail_pct": 0.0036000000000000003
-        },
-        {
-          "instrument": "ITA",
-          "side": "BUY",
-          "weight": 0.0704,
-          "probability": 0.67,
-          "expected_move_pct": 0.75,
-          "trail_pct": 0.0030000000000000005
-        }
-      ]
-    }
-  ],
+  "open_events": [],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -183,10 +131,18 @@
     "116801594265056664",
     "116802462702290667",
     "116802584127332758",
-    "116802722830895187"
+    "116802722830895187",
+    "116802765132974094",
+    "116808421221587297",
+    "116808568420301784",
+    "116808579545638198",
+    "116808606748078967",
+    "116808607334375489",
+    "116808686040715251",
+    "116810046344255729"
   ],
-  "last_run": "2026-06-24T17:13:55+00:00",
-  "days": 9,
+  "last_run": "2026-06-25T17:21:28+00:00",
+  "days": 10,
   "wins": 5,
-  "trades": 12
+  "trades": 14
 }
