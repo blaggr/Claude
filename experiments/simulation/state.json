@@ -3,7 +3,57 @@
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [],
+  "open_events": [
+    {
+      "post_id": "116817203281419093",
+      "post_ts": "2026-06-26T15:51:03.777000+00:00",
+      "headline": "The Islamic Republic of Iran shot at least four One Way Attack Drones at Ships transversing the Strait of Hormuz. One of the Drones solidly hit the upper deck of a large and very expensive Cargo Carry",
+      "signal": {
+        "topic": "geopolitics_conflict",
+        "valence": -1.0,
+        "intensity": 3.0,
+        "matched": [
+          "shot at least four One Way Attack Drones",
+          "hit the upper deck of a large and very expensive Cargo Carrying Ship",
+          "violation of our Ceasefire Agreement"
+        ]
+      },
+      "legs": [
+        {
+          "instrument": "USO",
+          "side": "BUY",
+          "weight": 0.5468,
+          "probability": 0.83,
+          "expected_move_pct": 3.0,
+          "trail_pct": 0.012000000000000002
+        },
+        {
+          "instrument": "GLD",
+          "side": "BUY",
+          "weight": 0.2187,
+          "probability": 0.83,
+          "expected_move_pct": 1.2,
+          "trail_pct": 0.0048
+        },
+        {
+          "instrument": "SPY",
+          "side": "SELL",
+          "weight": 0.164,
+          "probability": 0.83,
+          "expected_move_pct": -0.9,
+          "trail_pct": 0.0036000000000000003
+        },
+        {
+          "instrument": "ITA",
+          "side": "BUY",
+          "weight": 0.0704,
+          "probability": 0.67,
+          "expected_move_pct": 0.75,
+          "trail_pct": 0.0030000000000000005
+        }
+      ]
+    }
+  ],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -139,10 +189,23 @@
     "116808606748078967",
     "116808607334375489",
     "116808686040715251",
-    "116810046344255729"
+    "116810046344255729",
+    "116812000049397183",
+    "116812682074393050",
+    "116813106147178492",
+    "116813173401388945",
+    "116813202769287423",
+    "116813757947032364",
+    "116813942567060772",
+    "116813945998972533",
+    "116814051010230263",
+    "116816466651864171",
+    "116816735268373974",
+    "116816990404292958",
+    "116817021244415806"
   ],
-  "last_run": "2026-06-25T17:21:28+00:00",
-  "days": 10,
+  "last_run": "2026-06-26T17:06:01+00:00",
+  "days": 11,
   "wins": 5,
   "trades": 14
 }
