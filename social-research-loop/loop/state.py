@@ -19,12 +19,15 @@ class RunState:
     run_id: str
     question: str
     framework: str = "kirkpatrick"
+    config_path: str | None = None                            # run config used for LLM settings
+    seed: dict[str, Any] = field(default_factory=dict)        # researcher-provided study seed
     stages: list[str] = field(
         default_factory=lambda: ["frame", "design", "collect", "analyze", "interpret", "report", "recommend"]
     )
     current_stage_index: int = 0
     status: str = "pending_gate"  # pending_gate | approved | done
     outputs: dict[str, Any] = field(default_factory=dict)      # stage -> agent output
+    revise: dict[str, Any] = field(default_factory=dict)       # stage -> latest revision feedback
     critic: dict[str, Any] = field(default_factory=dict)       # stage -> critic result
     audit: list[dict[str, Any]] = field(default_factory=list)  # ordered event log
 

@@ -25,7 +25,8 @@ social-research-loop/
 ├── README.md               # this file
 ├── requirements.txt
 ├── config/
-│   └── loop.example.yaml   # example run configuration
+│   ├── loop.example.yaml             # annotated example configuration
+│   └── pilot-coaching-turnover.yaml  # Phase 1 pilot study config
 ├── agents/                 # one thin wrapper per agent role
 │   ├── base.py             # provider-agnostic LLM adapter + Agent base class
 │   ├── librarian.py        # (1) frame: question + evidence brief
@@ -36,8 +37,12 @@ social-research-loop/
 │   └── critic.py           # adversarial reviewer (runs across stages)
 ├── loop/
 │   ├── orchestrator.py     # drives the stage sequence + human gates
+│   ├── config.py           # loads run config YAML
 │   └── state.py            # resumable run state + audit trail
 ├── prompts/                # system prompts (one per agent)
+├── tests/                  # test suite (runs without an API key)
+├── examples/
+│   └── coaching-turnover-pilot/STUDY.md   # the Phase 1 pilot, documented
 ├── instruments/            # versioned survey/interview instruments
 ├── data/                   # datasets (git-ignored — never commit PII)
 ├── outputs/                # generated reports/figures (run-stamped)
@@ -48,21 +53,36 @@ social-research-loop/
 
 ## Status
 
-**Phase 0 — scaffold.** Structure, plan, prompts, and a runnable skeleton are in
-place. Agents return stubbed structured output until the LLM client is wired
-(Phase 1). See the roadmap in `PLAN.md` §8.
+**Phase 1 — in progress.** The LLM client is wired to the Claude API, runs are
+config-driven, the revise/approve human gates work, and a test suite covers the
+wiring. The active pilot is the **AI coaching → caseworker skill & turnover**
+study (Frame + Design, dry run, no live data) — see
+[`examples/coaching-turnover-pilot/STUDY.md`](examples/coaching-turnover-pilot/STUDY.md).
+Later stages (Analyze onward) are wired but run in Phase 2+. Roadmap: `PLAN.md` §10.
 
 ## Quick start
 
 ```bash
 cd social-research-loop
 pip install -r requirements.txt
-python -m loop.orchestrator --help          # show the stage runner
-python -m loop.orchestrator --new "Does an AI coaching simulation improve frontline caseworker skill and reduce first-year turnover?" --framework kirkpatrick
+export ANTHROPIC_API_KEY=...                 # required for real agent output
+
+# Run the pilot study from its config:
+python -m loop.orchestrator --config config/pilot-coaching-turnover.yaml
+python -m loop.orchestrator --resume pilot --approve      # review outputs/, then advance
+python -m loop.orchestrator --status pilot
+
+# Or start an ad-hoc run from a question:
+python -m loop.orchestrator --new "Your research question" --framework reaim
 ```
 
-This creates a resumable run and executes stage 1 (Frame). Each subsequent
-stage stops at a human gate; resume with `--resume <run-id> --approve`.
+Each stage stops at a human gate. Resume with `--resume <run-id> --approve`, or
+`--resume <run-id> --revise "<feedback>"` to re-run the stage with feedback.
+Without an API key the loop runs end-to-end in stub mode (used by the tests).
+
+```bash
+python -m unittest discover tests -v         # run the test suite (no key needed)
+```
 
 ## Ethics
 

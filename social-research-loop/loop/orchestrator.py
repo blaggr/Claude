@@ -21,13 +21,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agents import STAGE_AGENTS, Critic, LLMClient  # noqa: E402
+from loop.config import load_config  # noqa: E402
 from loop.state import RunState  # noqa: E402
 
 CRITIC_AFTER = {"analyze", "interpret", "report"}
 
 
-def _llm() -> LLMClient:
-    # Phase 1: read model/temperature from config/loop.yaml.
+def _llm(state: RunState) -> LLMClient:
+    """Build the LLM client from the run's config (falls back to defaults)."""
+    if state.config_path and Path(state.config_path).exists():
+        cfg = load_config(state.config_path).get("llm", {})
+        return LLMClient(
+            model=cfg.get("model", "claude-opus-4-8"),
+            temperature=cfg.get("temperature", 0.2),
+            max_tokens=cfg.get("max_tokens", 4096),
+        )
     return LLMClient()
 
 
@@ -47,11 +55,18 @@ def run_stage(state: RunState) -> RunState:
         state.save()
         return state
 
-    llm = _llm()
+    llm = _llm(state)
     agent = agent_cls(llm)
 
-    # Context = question + framework + all prior stage outputs.
-    context = {"question": state.question, "framework": state.framework, **state.outputs}
+    # Context = question + framework + researcher seed + all prior stage outputs.
+    context = {
+        "question": state.question,
+        "framework": state.framework,
+        "seed": state.seed,
+        **state.outputs,
+    }
+    if stage in state.revise:
+        context["_revise_feedback"] = state.revise[stage]
     output = agent.run(context)
     state.outputs[stage] = output
     state.log("stage_ran", stage=stage, agent=agent.ROLE)
@@ -90,12 +105,35 @@ def cmd_new(args: argparse.Namespace) -> None:
     run_stage(state)
 
 
+# Researcher-provided keys copied from a config's `project` block into the seed.
+SEED_KEYS = ("hypotheses", "population", "constraints", "comparison")
+
+
+def cmd_config(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    proj = cfg.get("project", {})
+    if not proj.get("question"):
+        raise ValueError(f"{args.config} has no project.question to run.")
+    run_id = args.id or "pilot"
+    state = RunState(
+        run_id=run_id,
+        question=proj["question"],
+        framework=proj.get("framework", "kirkpatrick"),
+        config_path=str(Path(args.config).resolve()),
+        seed={k: proj[k] for k in SEED_KEYS if k in proj},
+    )
+    state.log("run_created_from_config", config=args.config, project=proj.get("name"))
+    state.save()
+    print(f"Created run {run_id} from {args.config}. Running first stage...")
+    run_stage(state)
+
+
 def cmd_resume(args: argparse.Namespace) -> None:
     state = RunState.load(args.resume)
     if args.revise:
         # Re-run current stage with feedback appended.
         stage = state.current_stage
-        state.outputs.setdefault("_revise", {})[stage] = args.revise
+        state.revise[stage] = args.revise
         state.log("revise_requested", stage=stage, feedback=args.revise)
         run_stage(state)
     elif args.approve:
@@ -119,8 +157,9 @@ def cmd_status(args: argparse.Namespace) -> None:
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="Agentic research loop orchestrator")
     p.add_argument("--new", metavar="QUESTION", help="start a new run with this research question")
-    p.add_argument("--id", help="run id (default 001)")
-    p.add_argument("--framework", default="kirkpatrick", help="evaluation framework")
+    p.add_argument("--config", metavar="PATH", help="start a new run from a config YAML (uses project.question)")
+    p.add_argument("--id", help="run id (default 001, or 'pilot' for --config)")
+    p.add_argument("--framework", default="kirkpatrick", help="evaluation framework (with --new)")
     p.add_argument("--resume", metavar="RUN_ID", help="resume an existing run")
     p.add_argument("--approve", action="store_true", help="approve the current gate and advance")
     p.add_argument("--revise", metavar="FEEDBACK", help="re-run current stage with feedback")
@@ -129,6 +168,8 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.new:
         cmd_new(args)
+    elif args.config:
+        cmd_config(args)
     elif args.resume:
         cmd_resume(args)
     elif args.status:
