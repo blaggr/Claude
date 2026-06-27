@@ -4,6 +4,7 @@ import { MessageBubble } from "./components/MessageBubble";
 import { ToolCard } from "./components/ToolCard";
 import { runAgent, SYSTEM_PROMPT } from "./lib/agent";
 import { listModels } from "./lib/ollama";
+import { pickDefaultModel } from "./lib/models";
 import type { ChatMessage, ToolEvent } from "./lib/types";
 import { getWorkspace, pickWorkspace } from "./lib/workspace";
 
@@ -33,9 +34,12 @@ export function App() {
 
   useEffect(() => {
     listModels()
-      .then((m) => {
+      .then(async (m) => {
         setModels(m);
-        if (m.length) setModel((cur) => cur || m[0]);
+        if (m.length) {
+          const preferred = await pickDefaultModel(m);
+          setModel((cur) => cur || preferred);
+        }
       })
       .catch((e) => setError(`Could not reach Ollama: ${e}. Is it running?`));
     getWorkspace().then(setWorkspace).catch(() => {});

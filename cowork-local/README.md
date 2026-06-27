@@ -25,18 +25,64 @@ Ollama daemon on `127.0.0.1`.
 
 ## Prerequisites
 
-1. **Ollama** — install from <https://ollama.com>, then pull a tool‑capable model:
-   ```bash
-   ollama pull llama3.1          # or: qwen2.5, mistral-nemo, etc.
-   ```
-   Tool calling requires a model that supports it. Good local choices:
-   `llama3.1`, `qwen2.5`, `mistral-nemo`, `firefunction-v2`.
+1. **Ollama** — install from <https://ollama.com>. Then either pull a model by
+   hand, or use the **Qwen/GLM auto-setup** below (recommended). Tool calling
+   requires a model that supports it — `qwen3`/`qwen2.5` and `glm4` are good
+   tool-capable choices; `llama3.1` and `mistral-nemo` also work.
    Make sure Ollama is running (`ollama serve`, or just launch the app).
 
 2. **Rust** — <https://rustup.rs>
 3. **Node.js 18+** and npm.
 
 macOS also needs Xcode Command Line Tools (`xcode-select --install`).
+
+---
+
+## Run the newest Qwen / GLM automatically
+
+Cowork Local can track the **Qwen** and **GLM** model families and keep itself
+on the latest release. It works by *discovery*: each run it asks the Ollama
+library which `qwen*` / `glm*` base models are published and pulls the
+highest-versioned one (e.g. it picks `qwen3` over `qwen2.5`). This is why it
+keeps working when a vendor ships a new major version under a new name —
+nothing is hardcoded.
+
+> **Note on GLM:** GLM's availability in the official Ollama library is
+> intermittent. If no GLM base model is published, the updater says so and
+> falls back to Qwen. To run a specific GLM that's only on Hugging Face, import
+> its GGUF with `ollama create glm-custom -f Modelfile` and select it in the
+> app.
+
+### One-time setup (pull the latest now)
+
+```bash
+cd cowork-local
+./scripts/setup_models.sh                 # newest Qwen + GLM, default = Qwen
+# or make GLM the default when present:
+./scripts/setup_models.sh --primary glm
+```
+
+The app reads `~/.cowork-local/config.json` and pre-selects the model chosen
+here on launch. (If you skip this, the app still auto-selects the newest
+Qwen/GLM among whatever you've already installed.)
+
+### Keep it updated automatically (daily)
+
+Install a macOS LaunchAgent that re-checks and pulls newer releases every day:
+
+```bash
+./scripts/install_auto_update.sh                 # daily 03:00, prefer Qwen
+./scripts/install_auto_update.sh --primary glm    # prefer GLM
+./scripts/install_auto_update.sh --hour 9         # run at 09:00 instead
+./scripts/install_auto_update.sh --uninstall      # stop auto-updating
+```
+
+It runs once immediately and then on schedule; output goes to
+`~/.cowork-local/updater.log`. Check what it's doing any time without pulling:
+
+```bash
+python3 scripts/update_models.py --check
+```
 
 ---
 
