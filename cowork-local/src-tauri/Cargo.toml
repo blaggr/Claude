@@ -1,0 +1,31 @@
+[package]
+name = "cowork-local"
+version = "0.1.0"
+description = "A local, private Claude Cowork-style desktop agent powered by an open model."
+authors = ["you"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "cowork_local_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures-util = "0.3"
+thiserror = "2"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
