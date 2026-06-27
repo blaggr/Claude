@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { ApprovalDialog } from "./components/ApprovalDialog";
 import { MessageBubble } from "./components/MessageBubble";
 import { ToolCard } from "./components/ToolCard";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { runAgent, SYSTEM_PROMPT } from "./lib/agent";
 import { listModels } from "./lib/ollama";
 import { pickDefaultModel } from "./lib/models";
+import { updateModels } from "./lib/update";
 import type { ChatMessage, ToolEvent } from "./lib/types";
 import { getWorkspace, pickWorkspace } from "./lib/workspace";
 
@@ -24,6 +26,10 @@ export function App() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<ToolEvent | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [updateLines, setUpdateLines] = useState<string[]>([]);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   // Canonical transcript passed to the model (excludes UI-only metadata).
   const convo = useRef<ChatMessage[]>([{ role: "system", content: SYSTEM_PROMPT }]);
@@ -57,6 +63,30 @@ export function App() {
           : it
       )
     );
+  }
+
+  async function onUpdateModels() {
+    setUpdateOpen(true);
+    setUpdating(true);
+    setUpdateError(null);
+    setUpdateLines([]);
+    try {
+      const preferred = await updateModels(null, {
+        onLine: (t) => setUpdateLines((l) => [...l, t]),
+      });
+      const refreshed = await listModels();
+      setModels(refreshed);
+      if (refreshed.includes(preferred)) {
+        setModel(preferred);
+      } else {
+        const match = refreshed.find((m) => m.split(":")[0] === preferred.split(":")[0]);
+        if (match) setModel(match);
+      }
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUpdating(false);
+    }
   }
 
   async function onChooseWorkspace() {
@@ -158,6 +188,14 @@ export function App() {
           <button className="btn-secondary" onClick={onChooseWorkspace} disabled={running}>
             {workspace ? shorten(workspace) : "Choose workspace…"}
           </button>
+          <button
+            className="btn-secondary"
+            onClick={() => void onUpdateModels()}
+            disabled={running || updating}
+            title="Find and pull the newest Qwen / GLM models"
+          >
+            {updating ? "Updating…" : "Update models"}
+          </button>
         </div>
       </header>
 
@@ -210,6 +248,14 @@ export function App() {
       </footer>
 
       {pending && <ApprovalDialog evt={pending} onResolve={resolveApproval} />}
+      {updateOpen && (
+        <UpdateDialog
+          lines={updateLines}
+          running={updating}
+          error={updateError}
+          onClose={() => setUpdateOpen(false)}
+        />
+      )}
     </div>
   );
 }

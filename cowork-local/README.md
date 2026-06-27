@@ -66,6 +66,12 @@ The app reads `~/.cowork-local/config.json` and pre-selects the model chosen
 here on launch. (If you skip this, the app still auto-selects the newest
 Qwen/GLM among whatever you've already installed.)
 
+### Or update from inside the app
+
+Click **Update models** in the top bar. It runs the same discovery natively
+(no Python needed), streams pull progress in a panel, and switches the app to
+the newest model when it finishes.
+
 ### Keep it updated automatically (daily)
 
 Install a macOS LaunchAgent that re-checks and pulls newer releases every day:

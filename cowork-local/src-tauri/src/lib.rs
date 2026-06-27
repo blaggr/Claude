@@ -1,6 +1,7 @@
 mod config;
 mod error;
 mod fs_tools;
+mod models;
 mod ollama;
 mod shell;
 mod state;
@@ -22,6 +23,7 @@ pub fn run() {
             fs_tools::get_workspace,
             shell::run_command,
             config::get_preferred_model,
+            models::update_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Cowork Local");

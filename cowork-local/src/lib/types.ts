@@ -50,6 +50,13 @@ export interface CommandResult {
   code: number | null;
 }
 
+// Streaming events from the Rust `update_models` command.
+export type UpdateEvent =
+  | { event: "status"; data: { message: string } }
+  | { event: "progress"; data: { model: string; status: string; percent: number | null } }
+  | { event: "done"; data: { preferred: string; resolved: [string, string][] } }
+  | { event: "error"; data: { message: string } };
+
 // UI-facing record of a single tool invocation and its outcome.
 export interface ToolEvent {
   id: string;

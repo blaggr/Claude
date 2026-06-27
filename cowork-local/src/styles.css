@@ -276,6 +276,12 @@ button:disabled {
   margin-top: 8px;
   opacity: 0.85;
 }
+.update-log {
+  max-height: 320px;
+  min-height: 80px;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .modal-actions {
   display: flex;
   justify-content: flex-end;
