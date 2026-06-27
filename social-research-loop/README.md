@@ -65,7 +65,8 @@ Later stages (Analyze onward) are wired but run in Phase 2+. Roadmap: `PLAN.md` 
 ```bash
 cd social-research-loop
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY=...                 # required for real agent output
+export OPENAI_API_KEY=...                     # pilot uses OpenAI (set in llm.provider)
+# (or export ANTHROPIC_API_KEY=... and set llm.provider: anthropic in the config)
 
 # Run the pilot study from its config:
 python -m loop.orchestrator --config config/pilot-coaching-turnover.yaml

@@ -1,7 +1,8 @@
 # Core
 pyyaml>=6.0
 
-# LLM (provider-agnostic adapter targets the Claude API by default)
+# LLM (provider-agnostic adapter; install the one(s) you use)
+openai>=1.40.0
 anthropic>=0.40.0
 
 # Analyze stage (Phase 2+)

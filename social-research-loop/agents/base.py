@@ -15,43 +15,51 @@ from typing import Any
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
-class LLMClient:
-    """Thin, provider-agnostic wrapper. Default target: the Claude API.
+DEFAULT_MODELS = {"anthropic": "claude-opus-4-8", "openai": "gpt-4o"}
+ENV_KEYS = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
 
-    Swap this class to retarget providers without touching agents.
+
+class LLMClient:
+    """Thin, provider-agnostic wrapper. Supports the Claude API and OpenAI.
+
+    Select the provider via config (`llm.provider`). The matching API key is read
+    from the environment (ANTHROPIC_API_KEY / OPENAI_API_KEY). Without a key,
+    complete() returns a stub so the orchestrator runs offline.
     """
 
     def __init__(
         self,
-        model: str = "claude-opus-4-8",
+        provider: str = "anthropic",
+        model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 4096,
     ):
-        self.model = model
+        if provider not in DEFAULT_MODELS:
+            raise ValueError(f"Unknown provider {provider!r}; supported: {list(DEFAULT_MODELS)}")
+        self.provider = provider
+        self.model = model or DEFAULT_MODELS[provider]
         self.temperature = temperature
         self.max_tokens = max_tokens
 
     def complete(self, system: str, user: str) -> str:
-        """Return the model's text response.
-
-        Falls back to a placeholder if no API key is present, so the
-        orchestrator can be exercised without secrets. With a key, makes a real
-        Claude API call (lazy SDK import so the module imports without it).
-        """
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
+        """Return the model's text response (or a stub if no key is set)."""
+        if not os.environ.get(ENV_KEYS[self.provider]):
             return json.dumps(
-                {"_stub": True, "note": "Set ANTHROPIC_API_KEY to run agents for real."}
+                {"_stub": True, "note": f"Set {ENV_KEYS[self.provider]} to run agents for real."}
             )
+        if self.provider == "openai":
+            return self._complete_openai(system, user)
+        return self._complete_anthropic(system, user)
+
+    def _complete_anthropic(self, system: str, user: str) -> str:
         try:
             from anthropic import Anthropic
-        except ImportError as exc:  # SDK not installed
+        except ImportError as exc:
             raise RuntimeError(
-                "The anthropic SDK is required to run agents. "
+                "The anthropic SDK is required for provider 'anthropic'. "
                 "Install it with: pip install -r requirements.txt"
             ) from exc
-
-        client = Anthropic(api_key=api_key)
+        client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         msg = client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
@@ -62,6 +70,28 @@ class LLMClient:
         return "".join(
             block.text for block in msg.content if getattr(block, "type", None) == "text"
         )
+
+    def _complete_openai(self, system: str, user: str) -> str:
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError(
+                "The openai SDK is required for provider 'openai'. "
+                "Install it with: pip install -r requirements.txt"
+            ) from exc
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        # JSON mode: agents must return a JSON object (prompts already require it).
+        resp = client.chat.completions.create(
+            model=self.model,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        )
+        return resp.choices[0].message.content or ""
 
 
 class Agent:

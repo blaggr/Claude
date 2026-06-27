@@ -11,11 +11,14 @@ project:
   framework: "kirkpatrick"
 
 llm:
-  # Provider-agnostic adapter; default targets the Claude API.
-  provider: "anthropic"
-  model: "claude-opus-4-8"     # latest Claude model
-  # API key is read from the environment (ANTHROPIC_API_KEY), never from config.
+  # Provider-agnostic adapter. Supported: anthropic | openai.
+  provider: "openai"
+  model: "gpt-4o"              # e.g. gpt-4o (openai) or claude-opus-4-8 (anthropic)
+  # The matching key is read from the environment:
+  #   openai    -> OPENAI_API_KEY
+  #   anthropic -> ANTHROPIC_API_KEY
   temperature: 0.2
+  max_tokens: 4096
 
 loop:
   # Stages run in order; each stops at its human gate unless auto_approve is set.

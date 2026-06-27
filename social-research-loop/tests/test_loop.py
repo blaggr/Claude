@@ -80,6 +80,26 @@ class AgentContractTests(unittest.TestCase):
         self.assertIn("new caseworkers", llm.last_user)
 
 
+class ProviderTests(unittest.TestCase):
+    def test_openai_default_model(self):
+        self.assertEqual(LLMClient(provider="openai").model, "gpt-4o")
+
+    def test_unknown_provider_rejected(self):
+        with self.assertRaises(ValueError):
+            LLMClient(provider="nope")
+
+    def test_stub_without_key_names_the_right_env_var(self):
+        import os
+
+        saved = os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            out = LLMClient(provider="openai").complete("sys", "user")
+            self.assertIn("OPENAI_API_KEY", out)
+        finally:
+            if saved is not None:
+                os.environ["OPENAI_API_KEY"] = saved
+
+
 class StateTests(unittest.TestCase):
     def test_advance_and_status(self):
         s = RunState(run_id="t", question="q")

@@ -31,11 +31,11 @@ project:
     - "Outcomes for families are out of scope for this pilot but flagged for a later cycle."
 
 llm:
-  provider: "anthropic"
-  model: "claude-opus-4-8"
+  provider: "openai"          # anthropic | openai
+  model: "gpt-4o"
   temperature: 0.2
   max_tokens: 4096
-  # ANTHROPIC_API_KEY is read from the environment, never from config.
+  # The matching key is read from the environment (OPENAI_API_KEY), never from config.
 
 loop:
   # Phase 1 only runs frame + design; later stages are listed for completeness.

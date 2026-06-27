@@ -32,7 +32,8 @@ def _llm(state: RunState) -> LLMClient:
     if state.config_path and Path(state.config_path).exists():
         cfg = load_config(state.config_path).get("llm", {})
         return LLMClient(
-            model=cfg.get("model", "claude-opus-4-8"),
+            provider=cfg.get("provider", "anthropic"),
+            model=cfg.get("model"),
             temperature=cfg.get("temperature", 0.2),
             max_tokens=cfg.get("max_tokens", 4096),
         )

@@ -72,11 +72,13 @@ after the fact — a requirement for research reproducibility.
 
 ## LLM adapter
 
-`agents/base.LLMClient` is provider-agnostic. The default implementation targets
-the Claude API (model from config, e.g. `claude-opus-4-8`) and reads
-`ANTHROPIC_API_KEY` from the environment. Modules import cleanly without a key;
-the key is only required at call time. Swap the adapter to retarget providers
-without touching agents.
+`agents/base.LLMClient` is provider-agnostic and supports **OpenAI** and the
+**Claude API**, selected via `llm.provider` in config (`openai` | `anthropic`).
+The matching key is read from the environment (`OPENAI_API_KEY` /
+`ANTHROPIC_API_KEY`); the OpenAI path uses JSON-object response mode, the
+Anthropic path concatenates text blocks. Modules import cleanly without a key or
+SDK — both are only required at call time, and without a key `complete()` returns
+a stub so the loop runs offline. The pilot is configured for OpenAI (`gpt-4o`).
 
 ## Extension points
 
