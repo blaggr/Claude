@@ -178,9 +178,11 @@ Each agent = a system prompt (`prompts/`) + a thin Python wrapper (`agents/`)
   claims, unexamined disparate impact, confounds, over-reach, and missing
   limitations. A finding survives only if the Critic cannot refute it.
 
-> Roadmap option: promote the equity lens to a dedicated **Equity Reviewer**
-> agent if studies routinely demand deeper fairness audits than the Critic's
-> cross-cutting pass provides.
+> Decision (current): the equity lens lives **inside the Critic**, which already
+> hunts unexamined disparate impact and over-claimed AI benefit. A dedicated
+> **Equity Reviewer** agent remains a future option if studies routinely demand
+> deeper fairness audits than the Critic's cross-cutting pass provides, but it is
+> not planned for the pilot.
 
 ---
 

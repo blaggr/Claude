@@ -56,6 +56,22 @@ gate flow and state can be verified offline (this is what the test suite does).
 | Frame | Librarian | research question, background, known-vs-open, hypotheses, **cited** sources | Are claims cited? Is the question answerable? Is equity (H4) represented? |
 | Design | Methodologist | instrument (items tagged to Kirkpatrick levels), sampling, analysis plan **incl. pre-specified subgroup/disparate-impact analysis**, IRB-ready protocol summary, construct-validity notes | Is the instrument valid and unbiased? Is the equity analysis pre-specified? Is the IRB summary complete? |
 
+## Publishing the reference outputs
+
+Run outputs land in `outputs/` (git-ignored). To keep the pilot's Frame and
+Design results as a committed **reference example**, copy them next to this file
+and commit — they are design artifacts and contain no participant data, so they
+are safe to track:
+
+```bash
+cp outputs/run-pilot-00-frame.json  examples/coaching-turnover-pilot/frame.json
+cp outputs/run-pilot-01-design.json examples/coaching-turnover-pilot/design.json
+git add examples/coaching-turnover-pilot/*.json
+git commit -m "Add reference Frame/Design outputs for the coaching-turnover pilot"
+```
+
+(`examples/` is tracked; only `outputs/` and run state are ignored.)
+
 ## Scope of this pilot
 
 Phase 1 stops after Design. Collect → Analyze → Interpret → Report → Recommend
