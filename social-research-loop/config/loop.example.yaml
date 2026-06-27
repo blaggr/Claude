@@ -1,0 +1,34 @@
+# Example run configuration for the agentic research loop.
+# Copy to loop.yaml and edit.
+
+project:
+  name: "AWE onboarding transfer study"
+  # The evaluation framework findings are mapped onto.
+  framework: "kirkpatrick"   # kirkpatrick | logic_model | custom
+
+llm:
+  # Provider-agnostic adapter; default targets the Claude API.
+  provider: "anthropic"
+  model: "claude-opus-4-8"     # latest Claude model
+  # API key is read from the environment (ANTHROPIC_API_KEY), never from config.
+  temperature: 0.2
+
+loop:
+  # Stages run in order; each stops at its human gate unless auto_approve is set.
+  stages: [frame, design, collect, analyze, interpret, report, recommend]
+  auto_approve: false          # NEVER true for runs touching real human-subjects data
+
+critic:
+  enabled: true
+  # Number of independent adversarial passes per finding before it survives.
+  votes: 3
+  run_after: [analyze, interpret, report]
+
+ethics:
+  require_irb_record: true     # block Collect until an IRB approval id is recorded
+  require_deidentified: true   # refuse data ingest unless flagged de-identified
+
+paths:
+  instruments: "instruments/"
+  data: "data/"
+  outputs: "outputs/"

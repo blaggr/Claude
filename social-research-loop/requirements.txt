@@ -1,0 +1,13 @@
+# Core
+pyyaml>=6.0
+
+# LLM (provider-agnostic adapter targets the Claude API by default)
+anthropic>=0.40.0
+
+# Analyze stage (Phase 2+)
+pandas>=2.0
+scipy>=1.11
+statsmodels>=0.14
+
+# Optional: Qualtrics export connector (Phase 2)
+requests>=2.31
