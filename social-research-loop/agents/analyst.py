@@ -16,6 +16,7 @@ class Analyst(Agent):
     OUTPUT_SCHEMA = {
         "descriptives": "dict",
         "comparisons": "list",
+        "disparate_impact": "dict",
         "reliability": "dict",
         "assumptions": "list",
         "tables": "list",
@@ -29,9 +30,15 @@ class Analyst(Agent):
             "Report descriptives, group comparisons with effect sizes, scale "
             "reliability, and explicitly state and check assumptions. Do NOT "
             "fabricate values — only structure/interpret the numbers provided.\n\n"
+            "Also run the pre-specified DISPARATE-IMPACT analysis: for each "
+            "served subgroup, report the relevant outcome/error rates and "
+            "between-group differences (with uncertainty), and flag any subgroup "
+            "with too few cases to assess rather than glossing over it.\n\n"
             f"Analysis plan: {design.get('analysis_plan', '')}\n"
             f"Computed results (from data layer): {context.get('computed_results', '{}')}\n\n"
             "Return JSON with keys: descriptives, comparisons (list of "
-            "{contrast, stat, effect_size, p}), reliability, assumptions "
-            "(list of {assumption, met, note}), tables, caveats."
+            "{contrast, stat, effect_size, p}), disparate_impact "
+            "(subgroup -> {metric, value, difference_vs_reference, n, note}), "
+            "reliability, assumptions (list of {assumption, met, note}), tables, "
+            "caveats."
         )

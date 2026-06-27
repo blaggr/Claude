@@ -2,9 +2,13 @@
 # Copy to loop.yaml and edit.
 
 project:
-  name: "AWE onboarding transfer study"
+  name: "AI coaching simulation: caseworker skill & turnover study"
+  domain: "ai-in-child-welfare-and-human-services-workforce"
   # The evaluation framework findings are mapped onto.
-  framework: "kirkpatrick"   # kirkpatrick | logic_model | custom
+  #   kirkpatrick    – training/coaching interventions (reaction→learning→behavior→results)
+  #   reaim          – implementing an AI tool in practice (Reach/Effectiveness/Adoption/Implementation/Maintenance)
+  #   cfir           – barriers/facilitators of adoption
+  framework: "kirkpatrick"
 
 llm:
   # Provider-agnostic adapter; default targets the Claude API.
@@ -27,6 +31,15 @@ critic:
 ethics:
   require_irb_record: true     # block Collect until an IRB approval id is recorded
   require_deidentified: true   # refuse data ingest unless flagged de-identified
+  vulnerable_population: true  # children/families/frontline workers — heightened protections
+
+equity:
+  # Applied to every study: a pre-specified disparate-impact analysis is required
+  # before the Analyze gate can be approved.
+  require_subgroup_analysis: true
+  # Subgroups across which to assess disparate impact (de-identified categories only).
+  subgroups: ["race_ethnicity", "age_group", "geography", "socioeconomic_status"]
+  responsible_ai_lens: true    # Interpreter + Critic always apply the responsible-AI lens
 
 paths:
   instruments: "instruments/"
