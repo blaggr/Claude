@@ -3,7 +3,49 @@
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [],
+  "open_events": [
+    {
+      "post_id": "116853791867694191",
+      "post_ts": "2026-07-03T02:56:01.261000+00:00",
+      "headline": "Ridiculous for the U.S.A. to continue along this one sided path when the relationship is not reciprocal. They were not there for us!!! President DJT",
+      "signal": {
+        "topic": "trade_china",
+        "valence": -1.0,
+        "intensity": 2.0,
+        "matched": [
+          "one sided path",
+          "not reciprocal",
+          "were not there for us"
+        ]
+      },
+      "legs": [
+        {
+          "instrument": "SPY",
+          "side": "SELL",
+          "weight": 0.5567,
+          "probability": 0.77,
+          "expected_move_pct": -1.1,
+          "trail_pct": 0.0044
+        },
+        {
+          "instrument": "GLD",
+          "side": "BUY",
+          "weight": 0.2568,
+          "probability": 0.69,
+          "expected_move_pct": 0.72,
+          "trail_pct": 0.003
+        },
+        {
+          "instrument": "FXI",
+          "side": "SELL",
+          "weight": 0.1865,
+          "probability": 0.62,
+          "expected_move_pct": -0.83,
+          "trail_pct": 0.00332
+        }
+      ]
+    }
+  ],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -212,10 +254,13 @@
     "116847662330084420",
     "116847906594604040",
     "116850279579552155",
-    "116850596821921968"
+    "116850596821921968",
+    "116851640807022172",
+    "116853549264630885",
+    "116853560701003246"
   ],
-  "last_run": "2026-07-02T16:59:39+00:00",
-  "days": 15,
+  "last_run": "2026-07-03T16:43:09+00:00",
+  "days": 16,
   "wins": 6,
   "trades": 17
 }
