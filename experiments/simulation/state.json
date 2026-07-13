@@ -1,21 +1,22 @@
 {
-  "bankroll": 96.9748,
+  "bankroll": 96.3875,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
   "open_events": [
     {
-      "post_id": "116896167446779964",
-      "post_ts": "2026-07-10T14:32:41.320000+00:00",
-      "headline": "The Islamic Republic of Iran has asked us to continue \"talks.\" We have agreed to do so, but the United States has stated to them, in no uncertain terms, that the Cease Fire is OVER! Thank you for your",
+      "post_id": "116913091653271692",
+      "post_ts": "2026-07-13T14:16:44.181000+00:00",
+      "headline": "The Hormuz Strait is OPEN, and will remain OPEN, with or without Iran. We are reinstating the THE IRANIAN BLOCKADE, so named because it is only stopping Iran's ships or customers from entering or leav",
       "signal": {
         "topic": "geopolitics_conflict",
         "valence": -1.0,
         "intensity": 3.0,
         "matched": [
-          "Cease Fire is OVER",
-          "Islamic Republic of Iran",
-          "talks"
+          "reinstating the THE IRANIAN BLOCKADE",
+          "stopping Iran's ships",
+          "GUARDIAN OF THE HORMUZ STRAIT",
+          "volatile section of the World"
         ]
       },
       "legs": [
@@ -322,10 +323,35 @@
     "116886928331817100",
     "116887463214588151",
     "116892765570239312",
-    "116895869064122989"
+    "116895869064122989",
+    "116896167446779964",
+    "116908506444196312",
+    "116908781708997194",
+    "116908781848543413",
+    "116909300964979990",
+    "116909970912164568",
+    "116910001272572426",
+    "116910124906805108",
+    "116912813425065594",
+    "116912814470765683",
+    "116912815211197067",
+    "116912816060661558",
+    "116912817451345008",
+    "116912817965245012",
+    "116912819521603597",
+    "116912823820678738",
+    "116912825130233110",
+    "116912864476004058",
+    "116912865913293381",
+    "116912866407413041",
+    "116912867207290616",
+    "116912867728299923",
+    "116912869257680045",
+    "116912869381633198",
+    "116912869564925327"
   ],
-  "last_run": "2026-07-10T17:04:24+00:00",
-  "days": 21,
+  "last_run": "2026-07-13T17:21:17+00:00",
+  "days": 22,
   "wins": 6,
-  "trades": 19
+  "trades": 20
 }
