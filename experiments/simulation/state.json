@@ -1,60 +1,9 @@
 {
-  "bankroll": 96.3875,
+  "bankroll": 98.2027,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [
-    {
-      "post_id": "116913091653271692",
-      "post_ts": "2026-07-13T14:16:44.181000+00:00",
-      "headline": "The Hormuz Strait is OPEN, and will remain OPEN, with or without Iran. We are reinstating the THE IRANIAN BLOCKADE, so named because it is only stopping Iran's ships or customers from entering or leav",
-      "signal": {
-        "topic": "geopolitics_conflict",
-        "valence": -1.0,
-        "intensity": 3.0,
-        "matched": [
-          "reinstating the THE IRANIAN BLOCKADE",
-          "stopping Iran's ships",
-          "GUARDIAN OF THE HORMUZ STRAIT",
-          "volatile section of the World"
-        ]
-      },
-      "legs": [
-        {
-          "instrument": "USO",
-          "side": "BUY",
-          "weight": 0.5468,
-          "probability": 0.83,
-          "expected_move_pct": 3.0,
-          "trail_pct": 0.012000000000000002
-        },
-        {
-          "instrument": "GLD",
-          "side": "BUY",
-          "weight": 0.2187,
-          "probability": 0.83,
-          "expected_move_pct": 1.2,
-          "trail_pct": 0.0048
-        },
-        {
-          "instrument": "SPY",
-          "side": "SELL",
-          "weight": 0.164,
-          "probability": 0.83,
-          "expected_move_pct": -0.9,
-          "trail_pct": 0.0036000000000000003
-        },
-        {
-          "instrument": "ITA",
-          "side": "BUY",
-          "weight": 0.0704,
-          "probability": 0.67,
-          "expected_move_pct": 0.75,
-          "trail_pct": 0.0030000000000000005
-        }
-      ]
-    }
-  ],
+  "open_events": [],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -348,10 +297,18 @@
     "116912867728299923",
     "116912869257680045",
     "116912869381633198",
-    "116912869564925327"
+    "116912869564925327",
+    "116913091653271692",
+    "116919780125305335",
+    "116923472077180326",
+    "116923585931908111",
+    "116923602397013633",
+    "116923618784603444",
+    "116923765602106745",
+    "116923778080121038"
   ],
-  "last_run": "2026-07-14T16:23:46+00:00",
-  "days": 23,
-  "wins": 6,
-  "trades": 20
+  "last_run": "2026-07-15T16:41:33+00:00",
+  "days": 24,
+  "wins": 7,
+  "trades": 21
 }
