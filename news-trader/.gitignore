@@ -1,0 +1,16 @@
+.alpaca_keys
+.env
+real_data/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# worker runtime files — never commit state or logs
+worker_state.json
+worker_journal.jsonl
+*.log
+KILL
+
+# credentials + local venv — NEVER commit
+.env.local
+.venv/
