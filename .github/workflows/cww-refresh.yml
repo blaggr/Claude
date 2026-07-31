@@ -1,0 +1,99 @@
+name: CWW Database Refresh
+
+# Autonomous refresh + validation for the Child Welfare Workforce Database.
+#
+# Lives at the repo root (the only place GitHub Actions executes workflows) but
+# is scoped to the child-welfare-workforce/ project via path filters and
+# working-directory, so it never interferes with other projects in this repo.
+#
+# - validate: runs on every push/PR that touches the project — the DB must build
+#   and pass provenance/units/key validation. No secrets needed.
+# - refresh: scheduled autonomous gathering cycle (and manual dispatch). Launches
+#   a Claude Code session that follows agent/AGENT_PLAYBOOK.md and opens a draft
+#   PR with cited changes. Requires repo secret ANTHROPIC_API_KEY.
+
+on:
+  push:
+    paths:
+      - "child-welfare-workforce/**"
+  pull_request:
+    paths:
+      - "child-welfare-workforce/**"
+  schedule:
+    - cron: "0 9 * * 1"   # every Monday 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      target_count:
+        description: "How many agencies to refresh this run"
+        default: "8"
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # Always-on gate: the database must build and validate.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate CSVs and build database
+        working-directory: child-welfare-workforce
+        run: |
+          python agent/derive_metrics.py
+          python db/build_db.py --check
+          python db/build_db.py
+          python agent/coverage_report.py
+      - name: Upload built database
+        uses: actions/upload-artifact@v4
+        with:
+          name: cww-db
+          path: child-welfare-workforce/db/cww.db
+
+  # Scheduled autonomous gathering cycle.
+  refresh:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run expansion collectors (Tier 1) into data/incoming for review
+        working-directory: child-welfare-workforce
+        continue-on-error: true
+        env:
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+        run: |
+          python agent/collectors/ipeds_social_work.py || true
+          python agent/collectors/census_aspep.py || true
+      - name: Install OpenAI SDK
+        run: pip install --quiet openai
+      - name: Run OpenAI refresh gatherer (proposes cited rows)
+        working-directory: child-welfare-workforce
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          CWW_TARGET_COUNT: ${{ github.event.inputs.target_count || 8 }}
+        run: python agent/openai_refresh.py
+      - name: Open draft PR with proposed updates for review
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: cww-refresh-${{ github.run_id }}
+          draft: true
+          title: "CWW weekly refresh — proposed updates (run ${{ github.run_id }})"
+          commit-message: "CWW weekly refresh: collector + OpenAI proposed rows"
+          body: |
+            Automated weekly refresh. Proposed, **cited** workforce rows are in
+            `child-welfare-workforce/data/incoming/` (OpenAI gatherer + Tier-1
+            collectors). Review for accuracy, then merge trustworthy rows into
+            `data/metrics.csv` (the canonical, validated dataset). Nothing here
+            has entered the canonical file yet.
+          add-paths: child-welfare-workforce/data/incoming/**
+
