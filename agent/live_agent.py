@@ -50,6 +50,17 @@ from agent.memory import Memory  # noqa: E402
 from agent.positions import OpenPositions  # noqa: E402
 
 STATE_PATH = os.path.join(HERE, "state", "live_agent_state.json")
+HEARTBEAT_PATH = os.path.join(HERE, "state", "heartbeat")
+
+
+def _beat() -> None:
+    """Touch the heartbeat file each loop so the widget can show 'running'."""
+    try:
+        os.makedirs(os.path.dirname(HEARTBEAT_PATH), exist_ok=True)
+        with open(HEARTBEAT_PATH, "w") as f:
+            f.write(_now().isoformat())
+    except Exception:
+        pass
 
 
 def _default_fetch(since: dt.datetime):
@@ -187,6 +198,7 @@ def run_forever(*, interval: int = 30, once: bool = False, **poll_kwargs) -> int
                 return 0
             poll_once(broker, memory, state, **poll_kwargs)
             save_state(state)
+            _beat()                       # widget heartbeat (even on idle polls)
         except KeyboardInterrupt:
             save_state(state)
             memory.log("live_agent_stop", note="keyboard interrupt")

@@ -1,6 +1,7 @@
 # The single-shot agent (python -m agent.run) runs fully offline with zero
 # dependencies (stdlib only). These are optional and only activate the
 # corresponding upgraded paths:
+openai>=1.40       # reasoning + news classification with OpenAI (preferred if its key is set)
 anthropic>=0.40    # reasoning with Claude (else the offline heuristic policy drives the loop)
 yfinance>=0.2      # delayed quotes (else live Alpaca IEX, else the offline price stub)
 
