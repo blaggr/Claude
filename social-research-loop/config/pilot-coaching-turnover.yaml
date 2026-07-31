@@ -1,0 +1,63 @@
+# Phase 1 pilot study: AI coaching simulation -> caseworker skill & turnover.
+# Run with:  python -m loop.orchestrator --config config/pilot-coaching-turnover.yaml
+#
+# Phase 1 is a DRY RUN: only the Frame and Design stages are exercised, with no
+# live or case-level data. The researcher supplies the seed below; the Librarian
+# and Methodologist agents elaborate it into an evidence brief and an instrument.
+
+project:
+  name: "AI coaching simulation: caseworker skill & first-year turnover"
+  domain: "ai-in-child-welfare-and-human-services-workforce"
+  framework: "kirkpatrick"   # training/coaching intervention: reaction->learning->behavior->results
+  question: >
+    Does an AI coaching/simulation tool improve frontline child-welfare
+    caseworker skill acquisition and reduce first-year turnover, and are those
+    effects equitable across worker subgroups?
+  # Researcher-provided seed — humans frame, agents elaborate.
+  population: >
+    Newly hired frontline child-welfare caseworkers in their first 12 months at
+    a public human services agency.
+  comparison: >
+    Caseworkers onboarded with the AI coaching simulation vs. a comparison group
+    onboarded with standard training (quasi-experimental; randomization may not
+    be feasible).
+  hypotheses:
+    - "H1: AI-coaching users show larger pre/post skill gains than the comparison group (Kirkpatrick: learning)."
+    - "H2: AI-coaching users demonstrate better on-the-job practice transfer (Kirkpatrick: behavior)."
+    - "H3: First-year turnover is lower among AI-coaching users than the comparison group (Kirkpatrick: results)."
+    - "H4: Skill gains and turnover effects do not differ adversely across worker subgroups."
+  constraints:
+    - "Phase 1 dry run: no live or case-level data; design and instruments only."
+    - "Outcomes for families are out of scope for this pilot but flagged for a later cycle."
+
+llm:
+  provider: "openai"          # anthropic | openai
+  model: "gpt-4o"
+  temperature: 0.2
+  max_tokens: 4096
+  # The matching key is read from the environment (OPENAI_API_KEY), never from config.
+
+loop:
+  # Phase 1 only runs frame + design; later stages are listed for completeness.
+  stages: [frame, design, collect, analyze, interpret, report, recommend]
+  auto_approve: false
+
+critic:
+  enabled: true
+  votes: 3
+  run_after: [analyze, interpret, report]
+
+ethics:
+  require_irb_record: true
+  require_deidentified: true
+  vulnerable_population: true
+
+equity:
+  require_subgroup_analysis: true
+  subgroups: ["race_ethnicity", "age_group", "tenure_track", "office_region"]
+  responsible_ai_lens: true
+
+paths:
+  instruments: "instruments/"
+  data: "data/"
+  outputs: "outputs/"
