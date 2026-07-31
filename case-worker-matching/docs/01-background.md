@@ -17,46 +17,87 @@ received almost none of that attention. In most agencies it is governed by:
   and vulnerable to exactly the pressures (vacancies, crises) under which it matters most.
 
 The consequences are well documented even if the assignment mechanism itself is rarely
-studied directly:
+studied directly (full evidence review in [07-literature-synthesis.md](07-literature-synthesis.md)):
 
-- **Caseload size and weight predict worker outcomes.** Excessive caseloads are among
-  the most consistently reported drivers of burnout, secondary traumatic stress, and
-  turnover intention in child welfare (GAO, 2003; Lizano & Mor Barak, 2015; NCWWI
-  workforce reports). California's SB 2030 workload study (2000) remains the canonical
-  demonstration that mandated workloads exceeded the time available to perform even
-  minimum statutory activities.
-- **Turnover damages children's outcomes.** The frequently cited Milwaukee analysis
-  (Flower, McDonald, & Sumski, 2005) found that the probability of achieving permanency
-  within the study window fell dramatically with each additional worker assigned to a
-  case; subsequent work (e.g., Ryan et al., 2006; Edwards & Wildeman, 2018 on caseworker
-  instability) supports the general finding that worker discontinuity delays permanency
-  and disrupts family engagement.
-- **Skill–demand mismatch is a hidden safety issue.** Critical-incident reviews
-  routinely surface cases where a novice worker carried a case whose dynamics (coercive
-  control, medical complexity, sophisticated caregiver presentation) exceeded what their
-  training and supervision prepared them to see. Rotation-based assignment makes such
+- **Workload predicts worker outcomes — through burnout, not raw counts.** Perceived
+  workload is moderately related to burnout and turnover intention (Paul, 2021 —
+  QIC-WD umbrella synthesis; Lushin et al., 2023), and burnout erodes job satisfaction
+  longitudinally (Lizano & Mor Barak, 2015), with organizational resources acting
+  protectively (He et al., 2018). Notably, the best meta-analysis finds *objective*
+  caseload size alone does not significantly predict turnover intention (Kim & Kao,
+  2014) — which is precisely the argument for weighted workload over case counts: the
+  weight approximates the perceived-demand construct that actually predicts outcomes.
+  California's SB 2030 workload study (American Humane Association & Walter R. McDonald
+  & Associates, 2000, for CDSS) remains the canonical demonstration that mandated
+  workloads exceeded the time available — the state funded roughly one-third of the
+  resources needed for mandated activities. Federal turnover context: median caseworker
+  tenure ≈ 1.8 years and median state turnover 14–22% annually (Edwards & Wildeman,
+  2018, AFCARS 2003–2015).
+- **Worker discontinuity is consistently associated with worse child outcomes — the
+  association is robust, the causal magnitude is not established.** The widely cited
+  Milwaukee review (Flower, McDonald, & Sumski, 2005) reported permanency falling
+  steeply with each additional assigned worker, but it is unpublished descriptive gray
+  literature with a built-in time-at-risk confound; the current scoping review
+  (MacLochlainn et al., 2026) finds the association consistent across four decades of
+  studies while judging the causal evidence base thin. Stronger recent evidence targets
+  the *mechanisms*: worker practice quality degrades before departure net of case
+  characteristics (Hoffmeister, 2026), post-reunification worker contact reduces reentry
+  (Ahn et al., 2025), worker count is associated with slower permanency in multivariate
+  models (Ryan et al., 2006), and youth describe disengagement after worker changes
+  (Strolin-Goltzman et al., 2010).
+- **Worker capability plausibly affects outcomes.** Children with MSW-level workers
+  spent ~5 months less in care in Illinois administrative data (Ryan et al., 2006);
+  worker education and supervision are associated with stronger family engagement and
+  alliance (Cheng & Lo, 2018). Critical-incident reviews routinely surface cases whose
+  dynamics exceeded a novice worker's preparation; rotation-based assignment makes such
   mismatches a matter of chance.
-- **Inequitable distribution of hard cases drives attrition of exactly the workers
-  agencies most need.** When the most capable workers reliably absorb the hardest cases
-  without capacity adjustment, the agency taxes competence — a pattern workers name in
-  exit interviews.
+- **Concentration of severe cases is a distinct hazard from total load.** The share of
+  trauma-heavy cases in a caseload predicts secondary traumatic stress more strongly
+  than case volume (Hensel et al., 2015, meta-analysis; child welfare bridge: Sprang et
+  al., 2011; Barbee et al., 2023), and case severity predicts worker departure (Kothari
+  et al., 2021). When the most capable workers reliably absorb the hardest cases, the
+  agency taxes competence — and case-mix, not just caseload, must be managed
+  (see Doc 04 §4.3's severe-share cap).
 
-## 1.2 What adjacent fields have solved
+## 1.2 What adjacent fields have solved — and what remains unproven
 
-The matching problem is not novel in structure; child welfare is late to it.
+The matching problem is not novel in structure; child welfare is late to it. But the
+precedents must be characterized honestly:
 
-- **Nursing acuity systems** assign patients to nurses using patient acuity scores and
-  nurse competency/experience levels, with unit-level balancing — the closest structural
-  analogue to CASE-MATCH, including the safety-floor logic (a high-acuity patient must
-  get a nurse above a competence threshold).
-- **Weighted caseload models in courts and probation** (e.g., National Center for State
-  Courts weighted caseload studies) established the methodology CASE-MATCH borrows for
-  case-weight calibration: time studies regressing logged effort on case attributes.
-- **Assignment optimization** is a mature area of operations research; the special
-  structure here (small per-unit worker pools, lexicographic objectives, online arrivals,
-  transfer penalties) is well within routine solver capability. The contribution of this
-  framework is not the optimizer; it is the **measurement layer** and the **governance
-  layer** that make optimization legitimate and useful in a child welfare context.
+- **Nursing acuity systems** assign patients to nurses using acuity scores and nurse
+  competency levels, with unit-level balancing — the closest *structural* analogue to
+  CASE-MATCH, including the safety-floor logic. The evidence status matters, though:
+  staffing *levels* clearly affect outcomes (Aiken et al., 2002), but systematic reviews
+  find the evidence for acuity-based staffing *tools* themselves "highly limited," with
+  no particular tool empirically favored and benefits confounded with added staff
+  (Griffiths et al., 2020; Twigg et al., 2021). The analogue is structurally
+  established and empirically unproven at the assignment level — which is exactly the
+  gap this framework's evaluation phase (Doc 06) is designed to close. The nurse–patient
+  assignment *optimization* literature is directly citable (Mullinax & Lawley, 2002;
+  Punnakitikashem et al., 2008; Sir et al., 2015 — whose acuity-plus-perceived-workload
+  MILP is the closest published analogue).
+- **Weighted caseload models in courts, probation, and public defense** (Flango &
+  Ostrom, 1996; Kleiman et al., 2017; Pace et al., 2023 — the RAND national public
+  defense workload study) established the two-track methodology CASE-MATCH borrows for
+  case-weight calibration: time studies regressing logged effort on case attributes,
+  adjusted by structured expert review.
+- **Assignment optimization** is a mature area of operations research (Burkard et al.,
+  2009; Pentico, 2007); the special structure here (small per-unit worker pools,
+  lexicographic objectives, online arrivals, transfer penalties) is well within routine
+  solver capability.
+- **Within child welfare itself, prior optimization work exists and this framework
+  builds beside it.** Baron et al. (2024) apply mechanism design to CPS *investigator*
+  assignment, replacing rotational queues, with simulated reductions of up to 14% in
+  unnecessary placements; adjacent work allocates homelessness services by predicted
+  outcomes (Kube et al., 2019) and studies foster-care matching-market design
+  (Highsmith, 2024); several states run workload-based staff *allocation* tools
+  (Washington DCYF, 2023). CASE-MATCH differs on the axis that matters for governance:
+  those approaches optimize against *predicted case outcomes*, while CASE-MATCH matches
+  *measured* case demands to *measured* worker capability and capacity, and never
+  predicts family outcomes. The framework's specific contribution is therefore: the
+  first **measurement layer on both sides of the match** (a validated complexity
+  instrument and a workforce capability instrument), the **governance layer**, and a
+  prospective evaluation design — not the optimizer itself.
 
 ## 1.3 Positioning: this is not a predictive risk model
 
@@ -75,10 +116,18 @@ CASE-MATCH is deliberately on the other side of the desk:
 
 This positioning is not a shield against all governance obligations — worker-side
 fairness, family-side equity monitoring, and transparency are treated fully in
-Doc 05 — but it materially changes the risk profile and the appropriate oversight regime.
-It also aligns with federal guidance trends (OMB M-24-10 and successors on public-sector
-AI; ACF's guidance on responsible use of technology in child welfare) that distinguish
-rights-impacting from operations-supporting uses.
+Doc 05 — but it materially changes the risk profile and the appropriate oversight
+regime. Two 2026 realities sharpen it (details in Doc 05 §5.7 and Doc 07 §7.9): the
+operative federal guidance is now OMB M-25-21, whose "high-impact AI" test CASE-MATCH
+analyzes explicitly rather than asserting exemption; and ACF now actively encourages
+predictive analytics in child welfare under human-in-the-loop, workforce-capacity, and
+transparency conditions — so CASE-MATCH is best understood not as a rival to predictive
+risk models but as the *workforce-side infrastructure* those conditions presuppose,
+while keeping its bright line: it never scores families. The empirical record on the
+AFST cuts both ways and is cited both ways: overrides by workers improved racial equity
+(Cheng et al., 2022), the tool plus discretion reduced disparities (Rittenhouse et al.,
+2026), and the civil-rights scrutiny it drew (AP, 2022–2023; Gerchick et al., 2023) is
+the reason CASE-MATCH's family-facing line exists.
 
 ## 1.4 Why decision support, not automation
 
@@ -140,26 +189,10 @@ teeth; each maps to a specific mechanism:
   (a distinct matching problem); private-agency contracted case management; supervisor–
   worker matching (flagged as an extension in Doc 04 §4.8).
 
-## 1.8 References (indicative; verify before formal use)
+## 1.8 References
 
-- Chouldechova, A., Benavides-Prado, D., Fialko, O., & Vaithianathan, R. (2018). A case
-  study of algorithm-assisted decision making in child maltreatment hotline screening.
-  *PMLR (FAT\*)*.
-- Edwards, F., & Wildeman, C. (2018). Characteristics of the front-line child welfare
-  workforce. *Children and Youth Services Review*.
-- Eubanks, V. (2018). *Automating Inequality*. St. Martin's Press.
-- Flower, C., McDonald, J., & Sumski, M. (2005). *Review of turnover in Milwaukee County
-  private agency child welfare ongoing case management staff*. Bureau of Milwaukee Child
-  Welfare.
-- GAO (2003). *Child welfare: HHS could play a greater role in helping child welfare
-  agencies recruit and retain staff* (GAO-03-357).
-- Lizano, E. L., & Mor Barak, M. (2015). Job burnout and affective wellbeing: A
-  longitudinal study of burnout and job satisfaction among public child welfare workers.
-  *Children and Youth Services Review*.
-- California Legislature (2000). *SB 2030 Child Welfare Services Workload Study*
-  (American Humane Association for CDSS).
-- Ryan, J. P., Garnier, P., Zyphur, M., & Zhai, F. (2006). Investigating the effects of
-  caseworker characteristics in child welfare. *Children and Youth Services Review*.
-- Child Welfare League of America. *Standards of excellence for services* (caseload
-  guidance); NCSC weighted caseload methodology reports; NCWWI workforce development
-  literature.
+All citations in this framework were verified against primary or authoritative sources
+in July 2026; the consolidated, verified reference list — with DOIs/URLs, gray-literature
+flags, and verification caveats — is maintained in [references.md](references.md). The
+assumption-by-assumption evidence review is in
+[07-literature-synthesis.md](07-literature-synthesis.md).

@@ -10,16 +10,30 @@ two outputs used by the matching layer:
 2. a **scalar case weight** `w(c)` in **workload points (WLP)** — the case's expected
    consumption of worker capacity, used in all caseload accounting.
 
+**Design precedent.** No validated case-*complexity* instrument distinct from risk
+exists in child welfare (a 2024 *BJSW* review finds complexity discussed but essentially
+unmeasured), but one exists in general health care: **INTERMED** (Huyse et al., 1999;
+de Jonge et al., 2005), a multi-domain biopsychosocial complexity index with 0–3
+anchored items and interrater r = .91–.96, explicitly distinct from illness severity.
+The CCI mirrors its design logic — anchored multi-domain rating, complexity ≠ risk —
+and its validation sequence (Doc 06, Phase A).
+
 ## 2.1 Design requirements
 
 - **Ratable in ≤ 10 minutes** by the screening or transferring worker from information
   already gathered, with supervisor confirmation at assignment.
 - **Behaviorally anchored** 0–3 ratings per domain (following the CANS "action-level"
-  convention: 0 = no need for special attention; 1 = watch/mild; 2 = clearly elevates
-  the work; 3 = dominates the work / requires specialized capability).
+  convention — Lyons, 2009; reliability precedent: Anderson et al., 2003 — with the
+  caveat that independent CANS psychometric evidence is thinner than its adoption
+  suggests (Brown et al., 2022), so the CCI runs its own full validation rather than
+  importing CANS's: 0 = no need for special attention; 1 = watch/mild; 2 = clearly
+  elevates the work; 3 = dominates the work / requires specialized capability).
 - **Crosswalkable**: every domain lists which SDM, CANS, and standard SACWIS/CCWIS
   fields can pre-populate or inform the rating, so agencies with structured assessments
-  start warm rather than cold.
+  start warm rather than cold. Crosswalks lean on the SDM actuarial *risk* scales,
+  which have comparative validity evidence (Baird & Wagner, 2000; Johnson, 2011); the
+  SDM *safety* assessment is much more weakly validated (McNellan et al., 2022) and is
+  used as contextual input only, never as a validity anchor.
 - **Dynamic**: complexity is re-scored on defined triggers (§2.6); the case weight and
   profile in the optimizer are always the current ones.
 
@@ -121,7 +135,10 @@ w(c) = m_stage × ( b_stage + Σ_d β_d · c_d )
 - `b_stage`: base weight of a minimally complex case at that stage;
 - `β_d`: per-domain marginal weights, **calibrated empirically from a time study**
   (random-moment sampling or structured diaries; Doc 06 §A.4) by regressing logged case
-  hours on domain scores — not set by committee;
+  hours on domain scores, then adjusted by structured expert review — the two-track
+  (time study + Delphi) method that is standard in weighted-caseload practice (Flango &
+  Ostrom, 1996; Pace et al., 2023; live child welfare implementations: Washington DCYF,
+  2023; Wisconsin DCF, 2021) — not set by committee alone;
 - `m_stage`: stage multiplier {investigation, ongoing in-home, ongoing out-of-home,
   permanency/TPR} reflecting stage-level tempo differences.
 
@@ -152,15 +169,30 @@ Weight changes flow into the capacity ledger immediately; a re-score never by it
 triggers reassignment (reassignment is only proposed in rebalancing runs, with the
 continuity penalty applied — Doc 04 §4.5).
 
-## 2.7 Known measurement risks (addressed in Docs 05–06)
+## 2.7 Measurement risks and the anti-gaming operating procedure
 
 - **Complexity–demography confounding.** Poverty-linked items (housing instability,
-  systems involvement) will correlate with race and class. In CASE-MATCH the *effect* of
-  a higher score is a more capable worker and a lower-count caseload for that worker —
-  an equity-positive direction — but scoring disparities are still audited (Doc 05 §5.3)
-  because miscalibrated scores distort workload accounting and could stigmatize.
-- **Gaming and drift.** Workers have an incentive to over-score (weight relief) and
-  agencies to under-score (capacity appearance). Mitigations: dual rating, anchor-based
-  rather than numeric rating, drift monitoring against time-study re-checks (Doc 06 §D).
+  systems involvement) will correlate with race and class — system contact itself is
+  pervasive and racially unequal (Kim et al., 2017; Putnam-Hornstein et al., 2021), by
+  some combination of differential exposure and residual bias (Drake et al., 2011;
+  Dettlaff et al., 2011). In CASE-MATCH the *effect* of a higher score is a more capable
+  worker and a lower-count caseload for that worker — an equity-positive direction — but
+  scoring disparities are still audited (Doc 05 §5.3) because miscalibrated scores
+  distort workload accounting and could stigmatize.
+- **Gaming and drift are documented phenomena, not hypotheticals.** Indicators that
+  carry resource consequences corrupt the processes they measure (Campbell, 1979); DRG
+  "upcoding" is the canonical demonstration (Silverman & Skinner, 2004); nursing acuity
+  systems show chronic reliability decay in operation (Fasoli & Haddock, 2010); and
+  child welfare workers demonstrably adjust and subvert SDM scores in practice (Bosk,
+  2018). The CCI therefore builds the countermeasures into its operating procedure:
+  1. **Standing blind double-rating audit** — each quarter, a random ~5% of active
+     cases is independently re-rated by a rater outside the unit (the audit model shown
+     to preserve acuity-system reliability in nursing: Junttila et al., 2023);
+     audit-vs-operational drift is a standing steering-body report.
+  2. **Drift triangulation** — score distributions by office and rater, checked against
+     periodic time-study re-checks; rising scores without rising logged hours is the
+     upcoding signature (Doc 06 §D).
+  3. **Dual rating at assignment** with logged disagreements (§2.3) as the live
+     reliability stream.
 - **Rater burden.** Every added item costs adoption; the instrument stays at seven
   domains and one screen.

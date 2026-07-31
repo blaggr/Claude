@@ -4,7 +4,7 @@
 skills, experience, and caseload — at the individual worker, supervisor/unit, and
 agency levels.**
 
-Version 0.1 (working draft) · July 2026
+Version 0.2 (working draft; literature-reviewed) · July 2026
 
 ---
 
@@ -58,6 +58,9 @@ This distinction is central to the governance design (see
 | [04-matching-algorithm.md](docs/04-matching-algorithm.md) | Match-quality function, lexicographic objective hierarchy, formal MILP, three operating modes, supervisor- and agency-level layers |
 | [05-governance-ethics.md](docs/05-governance-ethics.md) | Human-in-the-loop rules, family- and worker-side fairness, equity audits, data governance, transparency artifacts |
 | [06-evaluation-plan.md](docs/06-evaluation-plan.md) | Phase A instrument validation, Phase B simulation, Phase C stepped-wedge pilot, Phase D scale & monitoring |
+| [07-literature-synthesis.md](docs/07-literature-synthesis.md) | Verified evidence review of every load-bearing assumption, with verdicts |
+| [08-model-revisions.md](docs/08-model-revisions.md) | Design changes adopted from the literature review — the changelog of record |
+| [references.md](docs/references.md) | Consolidated verified reference list (DOIs/URLs, gray-literature flags) |
 
 ## Core design principles
 
@@ -84,8 +87,17 @@ This distinction is central to the governance design (see
 
 ## Status and intended use
 
-This is a design-and-evaluation framework, not deployed software. Citations reflect the
-authors' reading of the child welfare workload and workforce literature and should be
-verified against the primary sources before formal submission. The intended next steps
-are (a) SME panel review of the CCI and WCP item sets, and (b) the Phase B simulation
-study using retrospective administrative data from a partner agency.
+This is a design-and-evaluation framework, not deployed software. Version 0.2
+incorporates a structured literature review (July 2026) in which every load-bearing
+assumption was checked against verified sources: the evidence review is in
+[docs/07-literature-synthesis.md](docs/07-literature-synthesis.md), the resulting
+design changes in [docs/08-model-revisions.md](docs/08-model-revisions.md), and the
+consolidated verified reference list in [docs/references.md](docs/references.md).
+Notable revisions: the transfer penalty re-specified as diminishing-marginal and
+explicitly non-causal in its calibration; a new severe-case-share cap per worker;
+strain-gated stretch assignments; override monitoring as a diagnostic rather than a
+target; the workload rationale routed through burnout rather than raw counts; and the
+policy-alignment section rewritten for the 2026 federal landscape (OMB M-25-21; ACF's
+2026 predictive-analytics guidance). The intended next steps are (a) SME panel review
+of the CCI and WCP item sets, and (b) the Phase B simulation study using retrospective
+administrative data from a partner agency.

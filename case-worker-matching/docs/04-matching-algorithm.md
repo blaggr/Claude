@@ -68,9 +68,11 @@ this component *seeks* reunions at new assignment.)
 the family/placements; language convenience above credential minimums.
 
 **(e) Developmental stretch (weight ~10, gated).** Bonus if the case exercises a flagged
-growth domain `g_j`, subject to the three gates in Doc 03 §3.5 (tier ≤ demonstrated+1,
-supervisor flag, supervision budget). Ungated stretch would let the optimizer discover
-that "development" is a cheap way to dump hard cases on juniors; the gates make it a
+growth domain `g_j`, subject to the four gates in Doc 03 §3.5 (tier ≤ demonstrated+1,
+supervisor flag, supervision budget, and no elevated strain indicators). Ungated
+stretch would let the optimizer discover that "development" is a cheap way to dump hard
+cases on juniors — and the development literature shows challenge without support
+produces exhaustion, not growth (Courtright et al., 2014); the gates make it a
 supervised apprenticeship mechanism.
 
 Component weights are agency-configurable within guardrails (alignment may not fall
@@ -93,6 +95,8 @@ z_i = 1 − x_{i,a(i)} for i ∈ E.
                                                           safety floor (critical domains:
                                                           those with c_id = 3; floors f_d
                                                           set by policy, default s ≥ 2)
+(7) Σ_i [T(i)∈{T3,T4}] x_ij ≤ ρ_max Σ_i x_ij ∀j           severe-share cap
+                                                          (default ρ_max = 0.4)
 L1: minimize Σ_{i: T4∨flagged} q_i           (escalations; ideally 0)
 L2: maximize Σ_ij M(i,j) x_ij                subject to L1 optimum
 L3: minimize η  s.t.  ū−η ≤ u_j ≤ ū+η ∀j,    u_j = Σ_i w_i x_ij / κ_j,
@@ -105,10 +109,35 @@ carry this case* — the model must say so loudly rather than silently degrade t
 Escalated cases route up: unit → office → agency queue (§4.8), and persistent
 escalations are the agency's capability-gap signal (§4.9).
 
-**Transfer penalty.** `τ_i = τ₀ · dur(i)^γ · stage_i`, increasing in relationship
-duration (concave, γ≈0.5) and stage-scaled, with **milestone lockouts**: `z_i` is fixed
-to 0 (transfer prohibited) within a policy window of a TPR hearing, permanency
-milestone, or imminent reunification, absent supervisor-initiated cause.
+**Severe-share cap (7).** Workload equity (L3) balances *total* load but would happily
+concentrate every severe case on one under-utilized expert. Constraint (7) prevents
+that: the *proportion* of trauma-heavy cases in a caseload predicts secondary traumatic
+stress more strongly than volume (Hensel et al., 2015, meta-analysis; child welfare
+bridge: Sprang et al., 2011; Barbee et al., 2023), and case severity predicts worker
+departure (Kothari et al., 2021). Together with the scarce-expertise reservation
+(Doc 03 §3.6), it bounds the "competence tax" from both sides. `ρ_max` is a policy
+parameter in the Phase B sensitivity set.
+
+**Transfer penalty.** For existing case `i` with prior transfer count `k_i`,
+relationship duration `dur_i`, and stage factor:
+
+```
+τ_i = τ₀ · φ^{k_i} · g(dur_i) · stage_i        φ < 1 (default 0.6), g concave
+```
+
+— a **diminishing-marginal-transfer** form: the *first* disruption of a long-standing
+relationship costs the most, and each subsequent transfer adds less marginal penalty.
+This matches the mechanism evidence (relationship disruption, engagement loss,
+pre-departure practice degradation: Hoffmeister, 2026; Ahn et al., 2025;
+Strolin-Goltzman et al., 2010; Ryan et al., 2006) rather than the widely quoted but
+confounded permanency-cliff percentages of Flower et al. (2005), which are descriptive
+gray literature with a time-at-risk artifact and must not be used to calibrate τ
+(see Doc 07 §7.2). `τ₀` and `φ` are policy parameters with mandatory Phase B
+sensitivity analysis; any future data-driven calibration must condition on case
+complexity and duration, or the model will attribute case-difficulty harm to transfers
+(Kothari et al., 2021). **Milestone lockouts** are unchanged: `z_i` is fixed to 0
+(transfer prohibited) within a policy window of a TPR hearing, permanency milestone, or
+imminent reunification, absent supervisor-initiated cause.
 
 **Tractability.** Without side constraints this is an assignment/min-cost-flow problem;
 with them it is a small MILP. Realistic instances (unit: 5–8 workers × dozens of cases;
@@ -165,8 +194,25 @@ Supervisors may:
 
 Reason codes (worker circumstances, family-specific history, team development, other +
 free text) feed drift monitoring and calibration review (Doc 06 §D). Override *rate* is
-a health metric with a two-sided target: near-0% suggests rubber-stamping, above ~30%
-suggests the model has lost the room.
+a **diagnostic, not a target**, read against what the field evidence shows functioning
+discretion looks like:
+
+- **Near-zero rates trigger an automation-bias review.** Complacent acceptance under
+  workload pressure is the documented failure mode (Skitka et al., 1999); workers catch
+  erroneous scores only where the culture licenses disagreement (De-Arteaga et al.,
+  2020).
+- **~25–35% disagreement is not failure.** In the Allegheny screening tool's real
+  operation, workers disagreed with the score roughly one-third of the time, and those
+  overrides *improved* racial equity (screen-in disparity 20% → 9%: Cheng et al., 2022;
+  see also Rittenhouse et al., 2026). Managers must not treat overrides as
+  non-compliance.
+- **Sustained rates above ~40–50%, or overrides that underperform recommendations on
+  subsequently observed match outcomes, trigger calibration/trust review** — human
+  deviations can be systematically biased and underperforming (Green & Chen, 2019a,
+  2019b), so override *quality* is monitored alongside quantity.
+- **Override reasons are treated as feedback on the matching criteria themselves**
+  (Kawakami et al., 2022: worker engagement depends on the tool's objective matching
+  their own), reviewed at every calibration cycle.
 
 ## 4.8 The supervisor/unit level
 

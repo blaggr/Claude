@@ -45,7 +45,21 @@ be *demonstrated, not assumed*:
   groups; a deficit is a red flag that overrides or configuration are leaking bias.
 - **Continuity parity**: transfer rates (`z`) by demographics — reassignment churn must
   not concentrate on any group.
+- **"Leftover match" monitoring**: allocation algorithms under scarcity can concentrate
+  disadvantage even without scoring anyone (Moon & Guha, 2026). The audit therefore
+  tracks not only average parity but *which families and which workers systematically
+  receive the lowest-scoring feasible matches* — the tail of the match-quality
+  distribution, by demographics and by unit.
 - Audit findings go to the oversight body (§5.6) with public summary statistics.
+
+The prevalence backdrop that makes this auditing non-optional: 37.4% of all U.S.
+children — and 53.0% of Black children — experience a CPS investigation by age 18 (Kim
+et al., 2017); cumulative placement and TPR rates show equally stark disparities
+(Putnam-Hornstein et al., 2021; Edwards et al., 2021; Wildeman & Emanuel, 2014). The
+framework cites both the differential-exposure and residual-bias accounts of these
+disparities (Drake et al., 2011, 2023; Dettlaff et al., 2011 — race predicted
+*substantiation* net of income and risk) because the proxy-risk audit is warranted
+under either mechanism.
 
 ## 5.4 Worker-side fairness
 
@@ -92,17 +106,51 @@ The deployment MUST publish, internally at minimum:
 - **Drift and health monitoring** (operational, monthly): override rates by unit and
   reason; escalation counts; utilization dispersion; stale-profile counts; scoring drift
   vs. time-study re-checks.
-- **Kill criteria** stated in advance: sustained override rates above threshold,
+- **Kill criteria** stated in advance: override patterns in the calibration-failure
+  range of the diagnostic regime (Doc 04 §4.7) uncorrected across two cycles,
   demonstrated scoring disparity uncorrected across two audit cycles, or evidence of
   performance-management misuse suspend the deployment pending remediation. A system
   whose de-commissioning conditions are unstated will not be trusted and should not be.
 
-## 5.7 Legal and policy alignment notes
+## 5.7 Legal and policy alignment (updated July 2026)
 
-- Consistent with the operations-supporting (not rights-impacting) classification under
-  OMB AI-governance guidance for public agencies (M-24-10 lineage) — verify against the
-  current version and any state equivalents (e.g., state algorithmic-accountability
-  statutes) at deployment.
+**Federal AI governance.** OMB M-24-10 (March 2024) was rescinded on April 3, 2025 and
+replaced by **M-25-21** (use and governance) and M-25-22 (procurement) under E.O.
+14179; M-25-21 is the operative guidance as of this writing. Its single **"high-impact
+AI"** category — AI whose output is "a principal basis for decisions or actions with
+legal, material, binding, or significant effect" — replaces the earlier
+rights-impacting/safety-impacting taxonomy. The framework performs that classification
+explicitly rather than asserting exemption:
+
+- *Toward families*: CASE-MATCH's output is not a principal basis for any decision
+  with legal or material effect on a family — the binding rules in §5.1–5.2 are what
+  guarantee that, and weakening them would change the classification, not just the
+  ethics.
+- *Toward workers*: assignment materially shapes working conditions, and employment
+  decisions appear in the "significant decision" prongs of state frameworks. The
+  deployment therefore **voluntarily adopts M-25-21's minimum practices** — AI impact
+  assessment, pre-deployment testing, ongoing monitoring, human oversight, and staff
+  training — as its floor, whatever the formal classification.
+
+**Federal child welfare posture.** ACF now actively encourages predictive analytics in
+child welfare under human-in-the-loop, workforce-capacity, and transparency conditions
+(ACF/ACYF issue brief on predictive risk modeling, March 2026; ACYF-CB-IM-26-03 on
+CCWIS modernization; state pilot funding announced June 2026). CASE-MATCH aligns as
+*complementary workforce-side infrastructure* — it builds the workforce capacity those
+conditions presuppose — while maintaining its bright line against family scoring, for
+which the AFST civil-rights record (AP investigations 2022–2023, DOJ Civil Rights
+Division interest; Gerchick et al., 2023; balanced by Rittenhouse et al., 2026) is the
+standing reason.
+
+**State law (a moving target — re-verify at deployment).** As of July 2026: Colorado's
+AI Act is nominally effective but enforcement-suspended and slated for replacement by a
+narrower ADMT framework effective January 2027; California's relevant instruments are
+AB 302 (state agencies must inventory high-risk automated decision systems — expect a
+deployed CASE-MATCH to be listed) and the CPPA ADMT regulations (binding vendors;
+employment "significant decision" compliance from January 2027). Any deployment should
+brief counsel on the then-current versions.
+
+**Unchanged obligations.**
 - ICWA handling (Doc 02 §2.4) implements, and cannot substitute for, the agency's legal
   obligations; tribal partners SHOULD be consulted on the ICWA credential standard.
 - Records generated (scores, overrides, audits) are agency records; retention and

@@ -26,7 +26,19 @@ practice (D6), and organizational tempo management (D7).
 
 Each domain is scored 0–3 using **behaviorally anchored rating scales (BARS)** — e.g.,
 D1 level 3: "has independently managed cases involving coercive-control dynamics or
-threats to staff; models safety-organized practice for peers" — via triangulation:
+threats to staff; models safety-organized practice for peers" — via triangulation.
+
+A note on what BARS does and does not buy: decades of comparative research show that
+anchored formats do **not** reliably outperform simpler scales psychometrically (Schwab
+et al., 1975; Landy & Farr, 1980 — rating quality lives in rater training and
+cognition, not format). BARS is used here for its demonstrated *process* strengths —
+transparency, job-relevance, feedback utility, and rater acceptance (Jacobs et al.,
+1980; original method: Smith & Kendall, 1963) — which are exactly what worker-facing
+legitimacy (Doc 05 §5.4) requires. The reliability investment goes where the evidence
+says it works: mandatory rater training, semi-annual cross-supervisor calibration
+sessions, and the Phase A dual-rating study with its live disagreement stream.
+
+Sources of evidence, triangulated:
 
 1. **Supervisor BARS rating** (primary; anchors force behavioral evidence, and Phase A
    tests their reliability);
@@ -71,7 +83,13 @@ full-time ongoing-services worker with no adjustments has `κ = 100` per month.
 - `ρ_role,j`: role factor — e.g., investigation workers on rotation intake weeks,
   workers with court-officer duties.
 - `A_j`: itemized adjustments, each visible in the ledger:
-  - **new-worker ramp**: −50% months 0–3, −25% months 4–6 (agency-configurable);
+  - **new-worker ramp**: −50% months 0–3, −25% months 4–6 (agency-configurable).
+    Graduated caseloads for new workers are documented agency practice (Alaska OCS's
+    six-case first quarter; NYC ACS's training-then-transition units; Child Welfare
+    Information Gateway, 2022) consistent with onboarding science (structured
+    onboarding improved organizational socialization in the QIC-WD portfolio), though
+    the ramp itself has not been tested as an intervention — it is recognized practice,
+    not evidence-based per se;
   - **secondary duties**: field-training/mentoring (each mentee −10), committee or
     on-call assignments (per policy schedule);
   - **planned leave** and return-from-leave ramp;
@@ -89,27 +107,43 @@ maximum of N children per worker). Both are L0-hard.
 **Development goals `g_j`.** Each supervision cycle, worker and supervisor may flag 1–2
 domains as growth targets. A case that exercises a flagged domain earns a bounded
 **stretch bonus** in the match score — but only when (a) the case's tier is at most one
-above the worker's demonstrated tier, (b) the supervisor's stretch flag is on, and
-(c) the unit's supervision-capacity constraint (§3.6) has room. Stretch is how the model
-grows the workforce instead of freezing it: without it, optimization converges to
-"experts get everything hard forever," which is both a burnout engine and a pipeline
-failure.
+above the worker's demonstrated tier, (b) the supervisor's stretch flag is on,
+(c) the unit's supervision-capacity constraint (§3.6) has room, and (d) the worker's
+**strain indicators are not elevated** (active sustainability adjustment,
+post-critical-incident window, or prior-period utilization > 92%). The gating is what
+the development literature prescribes, not bureaucracy: developmental challenge grows
+skill with *diminishing returns at high challenge*, offset specifically by feedback
+availability (DeRue & Wellman, 2009); and high challenge without self-efficacy and
+support produces emotional exhaustion and disengagement rather than growth (Courtright
+et al., 2014; see also Dragoni et al., 2009). Stretch is how the model grows the
+workforce instead of freezing it: without it, optimization converges to "experts get
+everything hard forever," which is both a burnout engine and a pipeline failure.
 
 **Sustainability guardrails.** Optionally, agencies may incorporate periodic well-being
-screening (e.g., ProQOL burnout/STS subscales) as a *worker-initiated or confidential*
-input that temporarily lowers effective capacity or pauses T4 eligibility. Governance is
+screening (e.g., ProQOL burnout/STS subscales — Stamm, 2010, now maintained by the
+Center for Victims of Torture; or the MBI — Maslach & Jackson, 1981; Maslach, Jackson,
+& Leiter, 2016) as a *worker-initiated or confidential* input that temporarily lowers
+effective capacity or pauses T4 eligibility. Secondary traumatic stress is prevalent in
+this workforce (Sprang et al., 2011; ~54% of surveyed frontline workers at clinical STS
+levels in the QIC-WD's 13-jurisdiction sample — Barbee et al., 2023). Governance is
 strict (Doc 05 §5.4): self-report is never punitive, never appears in performance
 records, and enters the optimizer only as a capacity adjustment code without stated
 reason. Agencies uncomfortable with instrumented well-being data can run the model
 without it; the adjustment channel (supervisor-entered, reason-free) still exists.
+Note the evaluation implication (Doc 06): well-being gains do not automatically convert
+to retention — an STS intervention in the QIC-WD portfolio improved coping without
+reducing turnover — so the model treats these as distinct outcomes.
 
 ## 3.6 Supervision as a modeled resource
 
-Complex and stretch assignments consume supervisor coaching time, which is finite. Each
-case contributes a **supervision intensity** `σ_i` (a simple function of tier and
-stretch status: T1/T2 = 1, T3 = 2, T4 = 3, +2 if stretch), and each unit `u` has a
-supervision budget `S_u` (scaled by the supervisor's own span of control, admin load,
-and experience). The optimizer enforces `Σ_{i→unit u} σ_i x_ij ≤ S_u` (L0). This is the
+Complex and stretch assignments consume supervisor coaching time, which is finite — and
+supervision is not a soft input: meta-analytically, supervisory task assistance,
+social-emotional support, and interpersonal interaction relate to worker outcomes at
+r ≈ .30–.40 across 27 studies (Mor Barak et al., 2009; child welfare specifics:
+Collins-Camargo & Royse, 2010). Each case contributes a **supervision intensity** `σ_i`
+(a simple function of tier and stretch status: T1/T2 = 1, T3 = 2, T4 = 3, +2 if
+stretch), and each unit `u` has a supervision budget `S_u` (scaled by the supervisor's
+own span of control, admin load, and experience). The optimizer enforces `Σ_{i→unit u} σ_i x_ij ≤ S_u` (L0). This is the
 formal link between the individual level and the supervisor level: a unit full of
 novices *cannot* absorb many T4 cases no matter how the arithmetic of κ works out, and
 the model must route accordingly (Doc 04 §4.8).
