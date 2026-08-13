@@ -1,62 +1,9 @@
 {
-  "bankroll": 99.2126,
+  "bankroll": 99.3584,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [
-    {
-      "post_id": "117083017680231697",
-      "post_ts": "2026-08-12T14:31:09.583000+00:00",
-      "headline": "The U.S.A. has total control over the Strait of Hormuz. I THINK WE WILL KEEP IT! Our Naval Blockade is being called, by everyone, \"A WALL OF STEEL,\" and there is nothing Iran can do about it. They hav",
-      "signal": {
-        "topic": "geopolitics_conflict",
-        "valence": -1.0,
-        "intensity": 3.0,
-        "matched": [
-          "total control over the Strait of Hormuz",
-          "Naval Blockade",
-          "A WALL OF STEEL",
-          "nothing Iran can do",
-          "decimated IRGC",
-          "Bully of the Middle East"
-        ]
-      },
-      "legs": [
-        {
-          "instrument": "USO",
-          "side": "BUY",
-          "weight": 0.5468,
-          "probability": 0.83,
-          "expected_move_pct": 3.0,
-          "trail_pct": 0.012000000000000002
-        },
-        {
-          "instrument": "GLD",
-          "side": "BUY",
-          "weight": 0.2187,
-          "probability": 0.83,
-          "expected_move_pct": 1.2,
-          "trail_pct": 0.0048
-        },
-        {
-          "instrument": "SPY",
-          "side": "SELL",
-          "weight": 0.164,
-          "probability": 0.83,
-          "expected_move_pct": -0.9,
-          "trail_pct": 0.0036000000000000003
-        },
-        {
-          "instrument": "ITA",
-          "side": "BUY",
-          "weight": 0.0704,
-          "probability": 0.67,
-          "expected_move_pct": 0.75,
-          "trail_pct": 0.0030000000000000005
-        }
-      ]
-    }
-  ],
+  "open_events": [],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -657,10 +604,37 @@
     "117080057770790960",
     "117080184095005006",
     "117082485763139425",
-    "117082899005949110"
+    "117082899005949110",
+    "117083017680231697",
+    "117084211457388624",
+    "117084791804764881",
+    "117084793036271251",
+    "117084794047639979",
+    "117084796761499332",
+    "117084797802563089",
+    "117084798936770955",
+    "117084800480790674",
+    "117084801475307846",
+    "117084802456544265",
+    "117084803641067826",
+    "117084805501470506",
+    "117084806534472335",
+    "117084807594231596",
+    "117084808801556907",
+    "117084809928280169",
+    "117084810795263041",
+    "117084811877415311",
+    "117084813217111820",
+    "117084814123781429",
+    "117084815176671691",
+    "117084816241992634",
+    "117084817207695682",
+    "117084949169827129",
+    "117084962212047241",
+    "117085013643913800"
   ],
-  "last_run": "2026-08-12T16:06:04+00:00",
-  "days": 43,
-  "wins": 16,
-  "trades": 36
+  "last_run": "2026-08-13T16:06:16+00:00",
+  "days": 44,
+  "wins": 17,
+  "trades": 37
 }
