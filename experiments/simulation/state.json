@@ -1,61 +1,9 @@
 {
-  "bankroll": 99.1503,
+  "bankroll": 98.8736,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [
-    {
-      "post_id": "117116752164653735",
-      "post_ts": "2026-08-18T13:30:16.966000+00:00",
-      "headline": "There are no talks or conversations going on, or scheduled, with the Islamic Republic of Iran. The Naval Blockade remains in full force and effect. The Hormuz Strait is open and operating. All water m",
-      "signal": {
-        "topic": "geopolitics_conflict",
-        "valence": -1.0,
-        "intensity": 2.0,
-        "matched": [
-          "no talks or conversations",
-          "Naval Blockade",
-          "Hormuz Strait is open",
-          "water mines have been removed",
-          "full force and effect"
-        ]
-      },
-      "legs": [
-        {
-          "instrument": "USO",
-          "side": "BUY",
-          "weight": 0.5471,
-          "probability": 0.83,
-          "expected_move_pct": 2.5,
-          "trail_pct": 0.01
-        },
-        {
-          "instrument": "GLD",
-          "side": "BUY",
-          "weight": 0.2188,
-          "probability": 0.83,
-          "expected_move_pct": 1.0,
-          "trail_pct": 0.004
-        },
-        {
-          "instrument": "SPY",
-          "side": "SELL",
-          "weight": 0.1641,
-          "probability": 0.83,
-          "expected_move_pct": -0.75,
-          "trail_pct": 0.0030000000000000005
-        },
-        {
-          "instrument": "ITA",
-          "side": "BUY",
-          "weight": 0.07,
-          "probability": 0.67,
-          "expected_move_pct": 0.62,
-          "trail_pct": 0.003
-        }
-      ]
-    }
-  ],
+  "open_events": [],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -768,10 +716,29 @@
     "117116193025089146",
     "117116197583802302",
     "117116227337554222",
-    "117116699169209088"
+    "117116699169209088",
+    "117116752164653735",
+    "117117567655907376",
+    "117117939770163535",
+    "117117994608282703",
+    "117118475271319244",
+    "117118611688599747",
+    "117118626722039422",
+    "117118656507718365",
+    "117118679309261908",
+    "117118691151954389",
+    "117118710370504523",
+    "117118726898376521",
+    "117118742340410434",
+    "117118759965215830",
+    "117119603749653762",
+    "117119613077575764",
+    "117119761850520698",
+    "117122454656898588",
+    "117122655030789696"
   ],
-  "last_run": "2026-08-18T15:41:03+00:00",
-  "days": 47,
-  "wins": 19,
-  "trades": 41
+  "last_run": "2026-08-19T15:40:49+00:00",
+  "days": 48,
+  "wins": 20,
+  "trades": 43
 }
