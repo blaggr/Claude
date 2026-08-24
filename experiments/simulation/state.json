@@ -1,9 +1,54 @@
 {
-  "bankroll": 100.1523,
+  "bankroll": 100.3849,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [],
+  "open_events": [
+    {
+      "post_id": "117150758113256193",
+      "post_ts": "2026-08-24T13:38:26.562000+00:00",
+      "headline": "Canada has been ripping off the United States of America for years. Their ridiculously high tariffs on our Farmers and farm products has made life impossible for these great American Patriots, and has",
+      "signal": {
+        "topic": "trade_china",
+        "valence": -1.0,
+        "intensity": 3.0,
+        "matched": [
+          "high tariffs",
+          "increased tariffs to 50%",
+          "not sustainable",
+          "rip off",
+          "deficit",
+          "treat Canada like a State no longer"
+        ]
+      },
+      "legs": [
+        {
+          "instrument": "SPY",
+          "side": "SELL",
+          "weight": 0.5562,
+          "probability": 0.77,
+          "expected_move_pct": -1.32,
+          "trail_pct": 0.00528
+        },
+        {
+          "instrument": "GLD",
+          "side": "BUY",
+          "weight": 0.2582,
+          "probability": 0.69,
+          "expected_move_pct": 0.87,
+          "trail_pct": 0.0034800000000000005
+        },
+        {
+          "instrument": "FXI",
+          "side": "SELL",
+          "weight": 0.1856,
+          "probability": 0.62,
+          "expected_move_pct": -0.99,
+          "trail_pct": 0.00396
+        }
+      ]
+    }
+  ],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -753,10 +798,31 @@
     "117129936834321487",
     "117130287849451563",
     "117133120342300539",
-    "117134194900118704"
+    "117134194900118704",
+    "117147749847925768",
+    "117147806182467462",
+    "117148203995010811",
+    "117148206284732927",
+    "117148209419677521",
+    "117148211512995425",
+    "117148212992149477",
+    "117148215693769273",
+    "117148217545915792",
+    "117148220406407911",
+    "117148614817419837",
+    "117148617954763691",
+    "117148812663367626",
+    "117148818788198933",
+    "117148820570832936",
+    "117148822269956937",
+    "117148823903421618",
+    "117148833275862351",
+    "117150535825256760",
+    "117150645492479889",
+    "117150648954405886"
   ],
-  "last_run": "2026-08-21T15:43:08+00:00",
-  "days": 50,
-  "wins": 21,
-  "trades": 45
+  "last_run": "2026-08-24T15:50:52+00:00",
+  "days": 51,
+  "wins": 22,
+  "trades": 46
 }
