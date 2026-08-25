@@ -1,50 +1,58 @@
 {
-  "bankroll": 100.3849,
+  "bankroll": 100.0993,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
   "open_events": [
     {
-      "post_id": "117150758113256193",
-      "post_ts": "2026-08-24T13:38:26.562000+00:00",
-      "headline": "Canada has been ripping off the United States of America for years. Their ridiculously high tariffs on our Farmers and farm products has made life impossible for these great American Patriots, and has",
+      "post_id": "117156395248393739",
+      "post_ts": "2026-08-25T13:32:02.418000+00:00",
+      "headline": "Based on my very good relationship with Kim Jong Un, of North Korea, I was not happy with the fact that the United States had, long ago, agreed to participate in Joint Military Exercises with South Ko",
       "signal": {
-        "topic": "trade_china",
-        "valence": -1.0,
-        "intensity": 3.0,
+        "topic": "geopolitics_conflict",
+        "valence": 1.0,
+        "intensity": 2.0,
         "matched": [
-          "high tariffs",
-          "increased tariffs to 50%",
-          "not sustainable",
-          "rip off",
-          "deficit",
-          "treat Canada like a State no longer"
+          "Joint Military Exercises",
+          "reduce",
+          "hostile",
+          "Kim Jong Un",
+          "unthreatening and respectful",
+          "Denuclearization of the Islamic Republic of Iran"
         ]
       },
       "legs": [
         {
-          "instrument": "SPY",
+          "instrument": "USO",
           "side": "SELL",
-          "weight": 0.5562,
-          "probability": 0.77,
-          "expected_move_pct": -1.32,
-          "trail_pct": 0.00528
+          "weight": 0.547,
+          "probability": 0.764,
+          "expected_move_pct": -2.5,
+          "trail_pct": 0.01
         },
         {
           "instrument": "GLD",
-          "side": "BUY",
-          "weight": 0.2582,
-          "probability": 0.69,
-          "expected_move_pct": 0.87,
-          "trail_pct": 0.0034800000000000005
+          "side": "SELL",
+          "weight": 0.2188,
+          "probability": 0.764,
+          "expected_move_pct": -1.0,
+          "trail_pct": 0.004
         },
         {
-          "instrument": "FXI",
+          "instrument": "SPY",
+          "side": "BUY",
+          "weight": 0.1641,
+          "probability": 0.764,
+          "expected_move_pct": 0.75,
+          "trail_pct": 0.0030000000000000005
+        },
+        {
+          "instrument": "ITA",
           "side": "SELL",
-          "weight": 0.1856,
-          "probability": 0.62,
-          "expected_move_pct": -0.99,
-          "trail_pct": 0.00396
+          "weight": 0.07,
+          "probability": 0.636,
+          "expected_move_pct": -0.62,
+          "trail_pct": 0.003
         }
       ]
     }
@@ -819,10 +827,29 @@
     "117148833275862351",
     "117150535825256760",
     "117150645492479889",
-    "117150648954405886"
+    "117150648954405886",
+    "117150758113256193",
+    "117151357800143501",
+    "117151534307707658",
+    "117151535369616658",
+    "117151536426663116",
+    "117151537334045486",
+    "117151538437231560",
+    "117151539756508748",
+    "117151540731400189",
+    "117151541955428414",
+    "117151548188083547",
+    "117151563623106908",
+    "117151563892688595",
+    "117151799569745572",
+    "117153496831869958",
+    "117153498897353817",
+    "117155789874645152",
+    "117155835599867728",
+    "117155941181023687"
   ],
-  "last_run": "2026-08-24T15:50:52+00:00",
-  "days": 51,
+  "last_run": "2026-08-25T15:54:23+00:00",
+  "days": 52,
   "wins": 22,
-  "trades": 46
+  "trades": 48
 }
