@@ -1,35 +1,9 @@
 {
-  "bankroll": 99.6174,
+  "bankroll": 99.7278,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [
-    {
-      "post_id": "117227003669020660",
-      "post_ts": "2026-09-07T00:48:41.414000+00:00",
-      "headline": "Trump cheers strong jobs report, calls for lower interest rates: https://justthenews.com/politics-policy/trump-cheers-strong-jobs-report-calls-lower-interest-rates",
-      "signal": {
-        "topic": "fed",
-        "valence": -1.0,
-        "intensity": 2.0,
-        "matched": [
-          "calls for lower interest rates",
-          "strong jobs report",
-          "Trump cheers"
-        ]
-      },
-      "legs": [
-        {
-          "instrument": "GLD",
-          "side": "BUY",
-          "weight": 1.0,
-          "probability": 0.83,
-          "expected_move_pct": 1.25,
-          "trail_pct": 0.005
-        }
-      ]
-    }
-  ],
+  "open_events": [],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -974,10 +948,17 @@
     "117226720070374585",
     "117226998492939377",
     "117227000697043074",
-    "117227002408906938"
+    "117227002408906938",
+    "117227003669020660",
+    "117231833977439431",
+    "117231907664551152",
+    "117231955365539795",
+    "117232243771103671",
+    "117232304514057261",
+    "117232308385195114"
   ],
-  "last_run": "2026-09-07T19:07:05+00:00",
-  "days": 61,
-  "wins": 26,
-  "trades": 59
+  "last_run": "2026-09-08T18:33:24+00:00",
+  "days": 62,
+  "wins": 27,
+  "trades": 60
 }
