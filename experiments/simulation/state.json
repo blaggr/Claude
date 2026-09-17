@@ -1,9 +1,59 @@
 {
-  "bankroll": 99.1146,
+  "bankroll": 99.1628,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [],
+  "open_events": [
+    {
+      "post_id": "117287545147440255",
+      "post_ts": "2026-09-17T17:25:11.063000+00:00",
+      "headline": "GREAT NEWS! Thanks to the bold leadership of my friend, Karol Nawrocki, President of Poland, major progress is being made toward establishing a U.S. Army base in Poland. If this happens, the location ",
+      "signal": {
+        "topic": "geopolitics_conflict",
+        "valence": -1.0,
+        "intensity": 2.0,
+        "matched": [
+          "U.S. Army base in Poland",
+          "historic step",
+          "U.S./Polish Alliance"
+        ]
+      },
+      "legs": [
+        {
+          "instrument": "USO",
+          "side": "BUY",
+          "weight": 0.5471,
+          "probability": 0.83,
+          "expected_move_pct": 2.5,
+          "trail_pct": 0.01
+        },
+        {
+          "instrument": "GLD",
+          "side": "BUY",
+          "weight": 0.2188,
+          "probability": 0.83,
+          "expected_move_pct": 1.0,
+          "trail_pct": 0.004
+        },
+        {
+          "instrument": "SPY",
+          "side": "SELL",
+          "weight": 0.1641,
+          "probability": 0.83,
+          "expected_move_pct": -0.75,
+          "trail_pct": 0.0030000000000000005
+        },
+        {
+          "instrument": "ITA",
+          "side": "BUY",
+          "weight": 0.07,
+          "probability": 0.67,
+          "expected_move_pct": 0.62,
+          "trail_pct": 0.003
+        }
+      ]
+    }
+  ],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -1010,10 +1060,18 @@
     "117276573235915643",
     "117276639949770622",
     "117276640394053011",
-    "117278320442685988"
+    "117278320442685988",
+    "117282617360268122",
+    "117282643318690567",
+    "117282768740023694",
+    "117282972517655406",
+    "117283156339074391",
+    "117283767428386257",
+    "117284234108021902",
+    "117286503878102441"
   ],
-  "last_run": "2026-09-16T18:50:36+00:00",
-  "days": 68,
-  "wins": 28,
-  "trades": 63
+  "last_run": "2026-09-17T18:57:30+00:00",
+  "days": 69,
+  "wins": 29,
+  "trades": 64
 }
