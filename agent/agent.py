@@ -21,7 +21,7 @@ import os
 from dataclasses import dataclass, field
 
 from .broker import get_broker
-from .llm import AnthropicLLM, HeuristicLLM
+from .llm import AnthropicLLM, HeuristicLLM, OpenAILLM
 from .memory import Memory
 from .positions import OpenPositions
 from .tools import TOOL_SCHEMAS, Toolbox
@@ -148,8 +148,14 @@ def run_session(objective: str = "Review the latest news and trade only a "
                       f"({e['reason']}, pnl {e['pnl']})")
 
     if llm is None:
-        llm = AnthropicLLM() if AnthropicLLM.available() else HeuristicLLM(
-            min_confidence=min_confidence)
+        # prefer OpenAI when its key is set (matches the repo's classifier
+        # chooser), then Anthropic, else the offline deterministic policy
+        if OpenAILLM.available():
+            llm = OpenAILLM()
+        elif AnthropicLLM.available():
+            llm = AnthropicLLM()
+        else:
+            llm = HeuristicLLM(min_confidence=min_confidence)
     if isinstance(llm, HeuristicLLM):
         llm.prime(news)
 

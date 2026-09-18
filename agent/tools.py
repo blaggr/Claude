@@ -32,6 +32,17 @@ from .broker import Fill
 from .memory import Memory
 
 
+def _choose_classifier():
+    """OpenAI if OPENAI_API_KEY, else Claude if an Anthropic key, else the
+    offline keyword model. The LLM classifiers fall back to keyword on their
+    own if their SDK/key is unavailable, so this is always safe."""
+    if os.environ.get("OPENAI_API_KEY"):
+        return nte.classify_openai
+    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+        return nte.classify_llm
+    return nte.classify
+
+
 # ---------------------------------------------------------------- schemas
 # Anthropic tool-use definitions. Names match the dispatcher keys below.
 TOOL_SCHEMAS = [
@@ -139,12 +150,13 @@ class Toolbox:
 
     def __init__(self, broker, memory: Memory, *, regime: str = "in_office",
                  event_budget_pct: float = 25.0, allow_network: bool = True,
-                 positions=None):
+                 positions=None, classify_fn=None):
         self.broker = broker
         self.memory = memory
         self.regime = regime
         self.event_budget_pct = event_budget_pct
         self.allow_network = allow_network
+        self._classify_fn = classify_fn or _choose_classifier()
         self.positions = positions          # OpenPositions store (optional)
         self._quote_cache: dict[str, float] = {}
         self._last_plan: dict[str, dict] = {}   # instrument -> calibrated leg
@@ -175,7 +187,7 @@ class Toolbox:
     def analyze_news(self, text: str, regime: str | None = None,
                      base_qty: int = 10) -> dict:
         plan = nte.plan_trade(text, base_qty, regime or self.regime,
-                              classify_fn=nte.classify)
+                              classify_fn=self._classify_fn)
         # remember each leg's exit plan so place_order can set the right
         # trailing stop / boundary when the agent acts on it
         self._last_headline = text[:160]
