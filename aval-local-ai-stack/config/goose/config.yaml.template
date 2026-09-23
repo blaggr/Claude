@@ -1,0 +1,35 @@
+# AVAL Local AI Stack: goose Desktop configuration.
+# Written by the AVAL installer. Your previous file is saved next to this one
+# as config.yaml.bak-<timestamp>. Edits here are overwritten on the next update.
+
+active_provider: ollama
+providers:
+  ollama:
+    enabled: true
+    model: __MODEL__
+    configured: true
+OLLAMA_HOST: "localhost"
+
+# Ask before EVERY tool call (file write, shell command). goose's default is
+# fully autonomous; do not change this without reading PLAN.md section 2.1.
+GOOSE_MODE: "approve"
+
+# Stop runaway agent loops.
+GOOSE_MAX_TURNS: 25
+
+# Context window sent to Ollama (maps to num_ctx).
+GOOSE_INPUT_LIMIT: __CONTEXT_TOKENS__
+
+# Privacy and safety
+GOOSE_TELEMETRY_ENABLED: false
+SECURITY_PROMPT_ENABLED: true
+__ALLOWLIST_LINE__
+__RECIPE_LINE__
+
+extensions:
+  developer:
+    bundled: true
+    enabled: true
+    name: developer
+    timeout: 300
+    type: builtin

@@ -1,0 +1,9 @@
+# goose extension allowlist. goose only checks installs of NEW extensions
+# against this list. Built-in extensions (developer, memory, etc.) are not
+# MCP installs and are controlled in config.yaml instead.
+#
+# Add an entry only after reviewing the MCP server's source and pinning a version.
+# Example (commented out on purpose):
+#   - id: filesystem
+#     command: npx -y @modelcontextprotocol/server-filesystem@<pinned-version>
+extensions: []
