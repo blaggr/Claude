@@ -24,6 +24,7 @@ Updating uses the same steps with the newer zip.
 ## Maintainers
 
 - [PLAN.md](PLAN.md): design, security model, rollout, sources
+- [docs/SECURE-LAPTOP-PLAN.md](docs/SECURE-LAPTOP-PLAN.md): **AVAL-R**, the restricted profile for P3 data on UCLA-managed laptops (development plan)
 - [docs/MAINTAINER.md](docs/MAINTAINER.md): monthly update and release checklist
 - [versions.conf](versions.conf) and [models.conf](models.conf): what every machine gets
 - [config/](config/): Ollama and goose settings pushed to every machine
