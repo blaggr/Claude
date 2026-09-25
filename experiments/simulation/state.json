@@ -1,9 +1,53 @@
 {
-  "bankroll": 98.2554,
+  "bankroll": 98.3141,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [],
+  "open_events": [
+    {
+      "post_id": "117332812545704813",
+      "post_ts": "2026-09-25T17:17:16.744000+00:00",
+      "headline": "President Xi and Madam Peng have just left D.C., heading for China. The meeting was one of Friendship, Strength, and Success, for both China and the U.S.A. We will be meeting again in November, in Chi",
+      "signal": {
+        "topic": "trade_china",
+        "valence": 1.0,
+        "intensity": 2.0,
+        "matched": [
+          "Friendship",
+          "Strength",
+          "Success",
+          "meeting again",
+          "accomplished"
+        ]
+      },
+      "legs": [
+        {
+          "instrument": "SPY",
+          "side": "BUY",
+          "weight": 0.5569,
+          "probability": 0.716,
+          "expected_move_pct": 1.1,
+          "trail_pct": 0.0044
+        },
+        {
+          "instrument": "GLD",
+          "side": "SELL",
+          "weight": 0.2567,
+          "probability": 0.652,
+          "expected_move_pct": -0.72,
+          "trail_pct": 0.003
+        },
+        {
+          "instrument": "FXI",
+          "side": "BUY",
+          "weight": 0.1864,
+          "probability": 0.596,
+          "expected_move_pct": 0.83,
+          "trail_pct": 0.00332
+        }
+      ]
+    }
+  ],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -1074,10 +1118,21 @@
     "117326051816460015",
     "117326051988618124",
     "117326052176100666",
-    "117326213046216794"
+    "117326213046216794",
+    "117327642327005783",
+    "117327643319552969",
+    "117327644146401995",
+    "117327644914730355",
+    "117327681306671844",
+    "117327988960070739",
+    "117328536706468024",
+    "117331168888375355",
+    "117331365166932627",
+    "117331749278785253",
+    "117332704655075384"
   ],
-  "last_run": "2026-09-24T19:02:28+00:00",
-  "days": 74,
-  "wins": 29,
-  "trades": 67
+  "last_run": "2026-09-25T19:13:31+00:00",
+  "days": 75,
+  "wins": 30,
+  "trades": 68
 }
