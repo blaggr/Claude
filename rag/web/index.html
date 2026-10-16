@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QIC Research Assistant</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="login" class="login-view">
+      <div class="login-card">
+        <h1>QIC Research Assistant</h1>
+        <p>Enter your API token to continue.</p>
+        <input id="token-input" type="password" placeholder="Bearer token" autocomplete="off" />
+        <button id="login-btn">Sign in</button>
+        <p id="login-error" class="error"></p>
+      </div>
+    </div>
+
+    <div id="app" class="app-view hidden">
+      <aside class="sidebar">
+        <div class="brand">
+          <h2>QIC Research</h2>
+          <button id="logout" class="link">Sign out</button>
+        </div>
+        <div class="meta">
+          <div><span class="label">Chunks indexed:</span> <span id="chunk-count">—</span></div>
+          <div><span class="label">Sources:</span> <span id="source-count">—</span></div>
+          <div><span class="label">Last reindex:</span> <span id="last-run">—</span></div>
+        </div>
+        <button id="reindex" class="secondary">Rebuild index</button>
+        <p class="hint">Crawls qic-wa.org + qic-wd.org, all linked docs, and 1 hop of external research links.</p>
+        <h3>Sources used</h3>
+        <ol id="sources"></ol>
+      </aside>
+
+      <main class="chat">
+        <header class="chat-header">
+          <h1>Ask the QIC corpus</h1>
+          <p>Synthesis, lookup, and Q&amp;A grounded in your research projects.</p>
+        </header>
+        <div id="messages" class="messages"></div>
+        <form id="composer" class="composer">
+          <textarea id="input" placeholder="Ask a research question…" rows="2" required></textarea>
+          <button id="send" type="submit">Send</button>
+        </form>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

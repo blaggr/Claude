@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: qic-rag
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    rootDir: rag
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: qic-rag-data
+      mountPath: /var/data
+      sizeGB: 10
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: API_BEARER_TOKEN
+        generateValue: true
+      - key: CHAT_MODEL
+        value: gpt-4o
+      - key: EMBEDDING_MODEL
+        value: text-embedding-3-large
+      - key: ENABLE_SCHEDULER
+        value: "true"
+      - key: REINDEX_CRON
+        value: "0 7 * * 1"
+      - key: DATA_DIR
+        value: /var/data
