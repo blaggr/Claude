@@ -38,8 +38,8 @@ preflight() {
   if [[ -z "${ALPACA_KEY_ID:-}" || -z "${ALPACA_SECRET_KEY:-}" ]]; then
     echo "FAIL: ALPACA_KEY_ID / ALPACA_SECRET_KEY not set (would fall back to the FAKE local broker)"; ok=0
   fi
-  if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-    echo "WARN: ANTHROPIC_API_KEY not set — the offline heuristic policy will drive the loop"
+  if [[ -z "${OPENAI_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "WARN: no OPENAI_API_KEY or ANTHROPIC_API_KEY — the offline heuristic policy will drive the loop"
   fi
   # the decisive check: the broker must resolve to Alpaca PAPER, never LIVE/local
   if [[ $ok -eq 1 ]]; then
