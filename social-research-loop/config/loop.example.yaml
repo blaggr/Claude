@@ -1,0 +1,50 @@
+# Example run configuration for the agentic research loop.
+# Copy to loop.yaml and edit.
+
+project:
+  name: "AI coaching simulation: caseworker skill & turnover study"
+  domain: "ai-in-child-welfare-and-human-services-workforce"
+  # The evaluation framework findings are mapped onto.
+  #   kirkpatrick    – training/coaching interventions (reaction→learning→behavior→results)
+  #   reaim          – implementing an AI tool in practice (Reach/Effectiveness/Adoption/Implementation/Maintenance)
+  #   cfir           – barriers/facilitators of adoption
+  framework: "kirkpatrick"
+
+llm:
+  # Provider-agnostic adapter. Supported: anthropic | openai.
+  provider: "openai"
+  model: "gpt-4o"              # e.g. gpt-4o (openai) or claude-opus-4-8 (anthropic)
+  # The matching key is read from the environment:
+  #   openai    -> OPENAI_API_KEY
+  #   anthropic -> ANTHROPIC_API_KEY
+  temperature: 0.2
+  max_tokens: 4096
+
+loop:
+  # Stages run in order; each stops at its human gate unless auto_approve is set.
+  stages: [frame, design, collect, analyze, interpret, report, recommend]
+  auto_approve: false          # NEVER true for runs touching real human-subjects data
+
+critic:
+  enabled: true
+  # Number of independent adversarial passes per finding before it survives.
+  votes: 3
+  run_after: [analyze, interpret, report]
+
+ethics:
+  require_irb_record: true     # block Collect until an IRB approval id is recorded
+  require_deidentified: true   # refuse data ingest unless flagged de-identified
+  vulnerable_population: true  # children/families/frontline workers — heightened protections
+
+equity:
+  # Applied to every study: a pre-specified disparate-impact analysis is required
+  # before the Analyze gate can be approved.
+  require_subgroup_analysis: true
+  # Subgroups across which to assess disparate impact (de-identified categories only).
+  subgroups: ["race_ethnicity", "age_group", "geography", "socioeconomic_status"]
+  responsible_ai_lens: true    # Interpreter + Critic always apply the responsible-AI lens
+
+paths:
+  instruments: "instruments/"
+  data: "data/"
+  outputs: "outputs/"
