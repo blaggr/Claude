@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd LaunchAgent for the news-trader paper worker.
+
+  Credentials are NOT in this file. They live in news-trader/.env.local
+  (chmod 600, gitignored), loaded by run.sh at launch — so secrets stay out of
+  the plist and out of git.
+
+  BEFORE LOADING:
+    1. Replace /ABSOLUTE/PATH/TO/news-trader (both places) with the real
+       path, e.g. /Users/you/Claude/news-trader
+    2. Create news-trader/.venv with pandas (see DEPLOY_MAC.md "Prerequisite").
+    3. Copy .env.local.example -> .env.local, fill it in, chmod 600.
+
+  Load:   launchctl load ~/Library/LaunchAgents/com.user.newstrader.plist
+  Unload: launchctl unload ~/Library/LaunchAgents/com.user.newstrader.plist
+  Stop:   touch /ABSOLUTE/PATH/TO/news-trader/KILL
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.newstrader</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/ABSOLUTE/PATH/TO/news-trader/run.sh</string>
+    </array>
+
+    <!-- Working directory so the worker's relative state/journal files land here -->
+    <key>WorkingDirectory</key>
+    <string>/ABSOLUTE/PATH/TO/news-trader</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- launchd restarts the process if it exits (crash or kill-switch exit) -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/newstrader.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/newstrader.log</string>
+</dict>
+</plist>
