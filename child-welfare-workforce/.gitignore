@@ -1,0 +1,11 @@
+# Built artifacts are reproducible from data/*.csv via db/build_db.py.
+# The DB is committed so it's queryable without a build step; drop it from
+# tracking by uncommenting the next line if you prefer build-on-demand.
+# db/cww.db
+
+__pycache__/
+*.pyc
+.DS_Store
+.env
+data/incoming/*.csv
+!data/incoming/.gitkeep
