@@ -1,9 +1,60 @@
 {
-  "bankroll": 99.0056,
+  "bankroll": 100.3219,
   "start_bankroll": 100.0,
   "busted": false,
   "pending_plan": null,
-  "open_events": [],
+  "open_events": [
+    {
+      "post_id": "117480043339306684",
+      "post_ts": "2026-10-21T17:20:00.368000+00:00",
+      "headline": "RT @realDonaldTrumpNumerous people, who requested that sanctions be immediately imposed on Russia, have called to apologize to President Trump in that they didn't know that he was negotiating the rele",
+      "signal": {
+        "topic": "geopolitics_conflict",
+        "valence": 1.0,
+        "intensity": 2.0,
+        "matched": [
+          "sanctions",
+          "negotiating the release",
+          "important deal",
+          "would have come to a halt"
+        ]
+      },
+      "legs": [
+        {
+          "instrument": "USO",
+          "side": "SELL",
+          "weight": 0.547,
+          "probability": 0.764,
+          "expected_move_pct": -2.5,
+          "trail_pct": 0.01
+        },
+        {
+          "instrument": "GLD",
+          "side": "SELL",
+          "weight": 0.2188,
+          "probability": 0.764,
+          "expected_move_pct": -1.0,
+          "trail_pct": 0.004
+        },
+        {
+          "instrument": "SPY",
+          "side": "BUY",
+          "weight": 0.1641,
+          "probability": 0.764,
+          "expected_move_pct": 0.75,
+          "trail_pct": 0.0030000000000000005
+        },
+        {
+          "instrument": "ITA",
+          "side": "SELL",
+          "weight": 0.07,
+          "probability": 0.636,
+          "expected_move_pct": -0.62,
+          "trail_pct": 0.003
+        }
+      ]
+    }
+  ],
   "processed_ids": [
     "116732777898985789",
     "116733724226062708",
@@ -1300,10 +1351,35 @@
     "117471494164657339",
     "117471498052081961",
     "117473326850171330",
-    "117474337843871362"
+    "117474337843871362",
+    "117474900035235218",
+    "117474902194097867",
+    "117474904278478680",
+    "117474908315721936",
+    "117475200660141375",
+    "117475204189906597",
+    "117475214051532398",
+    "117475275197816762",
+    "117475278291502005",
+    "117475293829837494",
+    "117476365886992522",
+    "117477279556215047",
+    "117478460769539937",
+    "117478508731391744",
+    "117478544626833616",
+    "117478575893014344",
+    "117478593489864840",
+    "117478842004893362",
+    "117479077625297841",
+    "117479079767228837",
+    "117479081625461199",
+    "117479083730049250",
+    "117479085659195617",
+    "117479429782667061",
+    "117480043201176772"
   ],
-  "last_run": "2026-10-20T19:10:21+00:00",
-  "days": 92,
-  "wins": 38,
-  "trades": 83
+  "last_run": "2026-10-21T19:15:05+00:00",
+  "days": 93,
+  "wins": 39,
+  "trades": 84
 }
